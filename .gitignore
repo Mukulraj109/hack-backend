@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Environment & secrets (use .env.example / .env-cmdrc.example.json)
+.env
+.env.*
+!.env.example
+.env-cmdrc.json
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# IDE & OS
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Runtime / uploads
+uploads/
+tmp/
+temp/
+.cache/
+
+# Firebase service account JSON (if added locally)
+*-firebase-adminsdk-*.json
+serviceAccount*.json
