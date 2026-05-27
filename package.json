@@ -8,6 +8,7 @@
     "dev:development": "env-cmd -e development tsx watch src/index.ts",
     "build": "tsc",
     "start": "env-cmd -e production node dist/index.js",
+    "start:render": "node dist/index.js",
     "seed": "env-cmd -e development tsx src/seed.ts"
   },
   "dependencies": {
