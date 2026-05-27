@@ -7,6 +7,7 @@
     "dev": "env-cmd -e local tsx watch src/index.ts",
     "dev:development": "env-cmd -e development tsx watch src/index.ts",
     "build": "tsc",
+    "build:render": "npm install --include=dev && npm run build",
     "start": "env-cmd -e production node dist/index.js",
     "start:render": "node dist/index.js",
     "seed": "env-cmd -e development tsx src/seed.ts"
@@ -24,9 +25,7 @@
     "mongoose": "^8.6.0",
     "multer": "^1.4.5-lts.1",
     "uuid": "^10.0.0",
-    "zod": "^3.23.8"
-  },
-  "devDependencies": {
+    "zod": "^3.23.8",
     "@types/bcryptjs": "^2.4.6",
     "@types/cookie-parser": "^1.4.7",
     "@types/cors": "^2.8.17",
@@ -35,8 +34,10 @@
     "@types/multer": "^1.4.11",
     "@types/node": "^22.5.0",
     "@types/uuid": "^10.0.0",
-    "env-cmd": "^10.1.0",
-    "tsx": "^4.19.0",
     "typescript": "^5.5.4"
+  },
+  "devDependencies": {
+    "env-cmd": "^10.1.0",
+    "tsx": "^4.19.0"
   }
 }

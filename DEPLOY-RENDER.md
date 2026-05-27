@@ -18,7 +18,7 @@ Config is **not** in git (`.env-cmdrc.json` is gitignored). On Render you paste 
 | **Region** | Oregon (or nearest) |
 | **Branch** | `main` |
 | **Runtime** | Node |
-| **Build Command** | `npm install && npm run build` |
+| **Build Command** | `npm install --include=dev && npm run build` |
 | **Start Command** | `npm run start:render` |
 | **Health Check Path** | `/health` |
 
