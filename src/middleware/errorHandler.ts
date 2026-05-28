@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import mongoose from 'mongoose';
 import { ApiError } from '../utils/ApiError.js';
 import { getEnv } from '../config/env.js';
 
@@ -14,6 +15,22 @@ export function errorHandler(
     res.status(err.statusCode).json({
       success: false,
       error: err.message,
+    });
+    return;
+  }
+
+  if (err instanceof mongoose.Error.ValidationError) {
+    res.status(400).json({
+      success: false,
+      error: err.message,
+    });
+    return;
+  }
+
+  if (err && typeof err === 'object' && 'code' in err && (err as { code: number }).code === 11000) {
+    res.status(409).json({
+      success: false,
+      error: 'Duplicate key — record already exists',
     });
     return;
   }

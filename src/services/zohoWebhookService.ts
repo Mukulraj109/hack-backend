@@ -1,13 +1,78 @@
 import { HackathonUser } from '../models/HackathonUser.js';
 import { generateReferralCode } from '../utils/generateCode.js';
+import { ApiError } from '../utils/ApiError.js';
+
+function coerceToString(value: unknown): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (typeof value === 'number' && !Number.isNaN(value)) return String(value);
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const s = coerceToString(item);
+      if (s) return s;
+    }
+    return undefined;
+  }
+  if (typeof value === 'object') {
+    return coerceToString(flattenFieldValue(value));
+  }
+  return undefined;
+}
 
 function pickString(data: Record<string, unknown>, ...keys: string[]): string | undefined {
   for (const key of keys) {
-    const val = data[key];
-    if (typeof val === 'string' && val.trim()) return val.trim();
-    if (typeof val === 'number') return String(val);
+    const val = coerceToString(data[key]);
+    if (val) return val;
   }
   return undefined;
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
+
+function looksLikeEmail(value: string): boolean {
+  return EMAIL_PATTERN.test(value.trim());
+}
+
+function sortedFieldEntries(data: Record<string, unknown>): [string, unknown][] {
+  return Object.entries(data).sort(([a], [b]) => {
+    const numA = /^Field_(\d+)$/i.exec(a)?.[1];
+    const numB = /^Field_(\d+)$/i.exec(b)?.[1];
+    if (numA && numB) return Number(numA) - Number(numB);
+    return a.localeCompare(b);
+  });
+}
+
+/** Zoho Auto-Map, labeled fields, or generic Field_1…Field_N (incl. test webhook). */
+function pickEmail(data: Record<string, unknown>): string | undefined {
+  const direct = pickString(
+    data,
+    'Email',
+    'email',
+    'Email Address',
+    'email_address',
+    'E-mail',
+    'E-Mail'
+  );
+  if (direct) return direct.toLowerCase();
+
+  for (const [key, value] of Object.entries(data)) {
+    if (/email/i.test(key)) {
+      const s = coerceToString(value);
+      if (s) return s.toLowerCase();
+    }
+  }
+
+  // Zoho "Test Webhook" sample uses Field_3, Field_24, etc. — use first email in field order
+  for (const [, value] of sortedFieldEntries(data)) {
+    const s = coerceToString(value);
+    if (s && looksLikeEmail(s)) return s.toLowerCase();
+  }
+
+  return undefined;
+}
+
+function hasGenericFieldKeys(data: Record<string, unknown>): boolean {
+  return Object.keys(data).some((k) => /^Field_\d+$/i.test(k));
 }
 
 function pickBool(data: Record<string, unknown>, ...keys: string[]): boolean {
@@ -47,10 +112,23 @@ function parseNameField(data: Record<string, unknown>): {
     }
     return { firstName: combined };
   }
-  return {
-    firstName: pickString(data, 'First Name', 'FirstName', 'first_name'),
-    lastName: pickString(data, 'Last Name', 'LastName', 'last_name'),
-  };
+  const firstName = pickString(data, 'First Name', 'FirstName', 'first_name');
+  const lastName = pickString(data, 'Last Name', 'LastName', 'last_name');
+  if (firstName || lastName) {
+    return { firstName, lastName };
+  }
+
+  // Zoho sample / unmapped webhooks: Field_1 = first name, Field_2 = last name
+  if (hasGenericFieldKeys(data)) {
+    const f1 = pickString(data, 'Field_1');
+    const f2 = pickString(data, 'Field_2');
+    if (f1 && f2 && !looksLikeEmail(f1) && !looksLikeEmail(f2)) {
+      return { firstName: f1, lastName: f2 };
+    }
+    if (f1 && !looksLikeEmail(f1)) return { firstName: f1 };
+  }
+
+  return {};
 }
 
 /** Zoho "Address" often "City, ST" in one field */
@@ -61,7 +139,15 @@ function parseAddressField(data: Record<string, unknown>): { city?: string; stat
     return { city, state };
   }
   const address = pickString(data, 'Address', 'address');
-  if (!address) return {};
+  if (!address) {
+    if (hasGenericFieldKeys(data)) {
+      return {
+        city: pickString(data, 'Field_5'),
+        state: pickString(data, 'Field_6'),
+      };
+    }
+    return {};
+  }
   const match = address.match(/^(.+?),\s*([A-Za-z]{2,})$/);
   if (match) {
     return { city: match[1].trim(), state: match[2].trim() };
@@ -69,21 +155,58 @@ function parseAddressField(data: Record<string, unknown>): { city?: string; stat
   return { city: address };
 }
 
+function pickAgreementValue(data: Record<string, unknown>, ...keys: string[]): boolean {
+  if (pickBool(data, ...keys)) return true;
+  for (const [, value] of Object.entries(data)) {
+    const s = coerceToString(value);
+    if (s === 'Agreed' || s === 'YES' || s === 'Yes') return true;
+  }
+  return false;
+}
+
+function flattenFieldValue(value: unknown): unknown {
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    const obj = value as Record<string, unknown>;
+    if ('value' in obj) return flattenFieldValue(obj.value);
+    if ('answer' in obj) return flattenFieldValue(obj.answer);
+    if ('text' in obj) return flattenFieldValue(obj.text);
+  }
+  return value;
+}
+
+function flattenZohoRecord(record: Record<string, unknown>): Record<string, unknown> {
+  const flat: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(record)) {
+    flat[key] = flattenFieldValue(value);
+  }
+  return flat;
+}
+
+/** Unwrap common Zoho Forms / CRM webhook body shapes into flat field map. */
 export function normalizeZohoPayload(body: unknown): Record<string, unknown> {
   if (!body || typeof body !== 'object') {
     return {};
   }
   const raw = body as Record<string, unknown>;
-  if (raw.payload && typeof raw.payload === 'object') {
-    return raw.payload as Record<string, unknown>;
+  const nested =
+    (raw.payload && typeof raw.payload === 'object' ? raw.payload : null) ??
+    (raw.data && typeof raw.data === 'object' ? raw.data : null) ??
+    (raw.form_data && typeof raw.form_data === 'object' ? raw.form_data : null);
+  if (nested && typeof nested === 'object') {
+    return flattenZohoRecord(nested as Record<string, unknown>);
   }
-  return raw;
+  return flattenZohoRecord(raw);
 }
 
 export async function upsertFromZohoWebhook(data: Record<string, unknown>) {
-  const email = pickString(data, 'Email', 'email', 'Email Address')?.toLowerCase();
+  const email = pickEmail(data);
   if (!email) {
-    throw new Error('Email is required in webhook payload');
+    const receivedKeys =
+      Object.keys(data).length > 0 ? Object.keys(data).join(', ') : '(empty body)';
+    throw ApiError.badRequest(
+      `Email is required in webhook payload. Received keys: ${receivedKeys}. In Zoho: Payload Parameters → Form Fields → Auto-Map Fields (must include Email).`
+    );
   }
 
   const { firstName, lastName } = parseNameField(data);
@@ -94,14 +217,26 @@ export async function upsertFromZohoWebhook(data: Record<string, unknown>) {
     email,
     firstName,
     lastName,
-    phone: pickString(data, 'Phone', 'phone'),
+    phone:
+      pickString(data, 'Phone', 'phone') ??
+      (hasGenericFieldKeys(data) ? pickString(data, 'Field_4') : undefined),
     city,
     state,
-    linkedinUrl: pickString(data, 'LinkedIn', 'LinkedIn URL', 'linkedin'),
-    githubUrl: pickString(data, 'GitHub', 'GitHub URL', 'github'),
-    universityName: pickString(data, 'University Name', 'University'),
-    graduationMonthYear: pickString(data, 'Graduation Month & Year', 'Graduation'),
-    currentCompanyName: pickString(data, 'Current Company Name', 'Company'),
+    linkedinUrl:
+      pickString(data, 'LinkedIn', 'LinkedIn URL', 'linkedin') ??
+      (hasGenericFieldKeys(data) ? pickString(data, 'Field_7') : undefined),
+    githubUrl:
+      pickString(data, 'GitHub', 'GitHub URL', 'github') ??
+      (hasGenericFieldKeys(data) ? pickString(data, 'Field_8') : undefined),
+    universityName:
+      pickString(data, 'University Name', 'University') ??
+      (hasGenericFieldKeys(data) ? pickString(data, 'Field_9') : undefined),
+    graduationMonthYear:
+      pickString(data, 'Graduation Month & Year', 'Graduation') ??
+      (hasGenericFieldKeys(data) ? pickString(data, 'Field_10') : undefined),
+    currentCompanyName:
+      pickString(data, 'Current Company Name', 'Company') ??
+      (hasGenericFieldKeys(data) ? pickString(data, 'Field_11') : undefined),
     eligibility: {
       usGraduateWindow: pickBool(
         data,
@@ -136,7 +271,7 @@ export async function upsertFromZohoWebhook(data: Record<string, unknown>) {
         'yes_confirmation',
         'Quick eligibility check'
       ),
-      termsAccepted: pickBool(data, 'Terms and Conditions', 'terms_accepted'),
+      termsAccepted: pickAgreementValue(data, 'Terms and Conditions', 'terms_accepted'),
       signatureConfirmed: pickBool(data, 'Signature', 'signature_confirmed'),
     },
     accountStatus: 'pending' as const,
