@@ -10,7 +10,8 @@
     "build:render": "npm install --include=dev && npm run build",
     "start": "env-cmd -e production node dist/index.js",
     "start:render": "node dist/index.js",
-    "seed": "env-cmd -e development tsx src/seed.ts"
+    "seed": "env-cmd -e development tsx src/seed.ts",
+    "recalculate-points": "env-cmd -e local tsx src/scripts/recalculateTeamPoints.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

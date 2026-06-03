@@ -1,5 +1,10 @@
 import { Request } from 'express';
-import { AccountStatus, IHackathonUser } from '../../models/HackathonUser.js';
+import {
+  AccountStatus,
+  AvailabilityTimeline,
+  HiringStatus,
+  IHackathonUser,
+} from '../../models/HackathonUser.js';
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -32,8 +37,16 @@ export interface HackathonSessionUser {
   email: string;
   firstName?: string;
   lastName?: string;
+  headshotUrl?: string;
+  linkedinUrl?: string;
+  resumeUrl?: string;
+  resumeFileName?: string;
+  hiringStatus?: HiringStatus;
+  availabilityTimeline?: AvailabilityTimeline;
   accountStatus: AccountStatus;
   hasRegistration: boolean;
   teamId?: string;
   canWrite: boolean;
+  totalPoints: number;
+  isAdmin: boolean;
 }

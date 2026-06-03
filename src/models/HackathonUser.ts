@@ -4,6 +4,10 @@ import { mongooseToJsonTransform } from '../utils/mongooseToJson.js';
 
 export type AccountStatus = 'pending' | 'active' | 'rejected' | 'suspended';
 
+export type HiringStatus = 'actively_looking' | 'open_to_offers' | 'not_looking';
+
+export type AvailabilityTimeline = 'immediate' | 'one_to_three_months' | 'three_plus_months';
+
 export interface IHackathonUser extends Document {
   _id: mongoose.Types.ObjectId;
   auth0UserId?: string;
@@ -36,9 +40,18 @@ export interface IHackathonUser extends Document {
   activatedAt?: Date;
   zohoSubmissionId?: string;
   registrationCompletedAt?: Date;
+  headshotUrl?: string;
+  headshotUpdatedAt?: Date;
+  resumeUrl?: string;
+  resumeFileName?: string;
+  resumeUpdatedAt?: Date;
+  hiringStatus?: HiringStatus;
+  availabilityTimeline?: AvailabilityTimeline;
   team?: mongoose.Types.ObjectId;
   referralCode: string;
   totalPoints: number;
+  manualPointsBonus: number;
+  isAdmin?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -91,6 +104,19 @@ const hackathonUserSchema = new Schema<IHackathonUser>(
     activatedAt: { type: Date },
     zohoSubmissionId: { type: String, index: true },
     registrationCompletedAt: { type: Date },
+    headshotUrl: { type: String, trim: true },
+    headshotUpdatedAt: { type: Date },
+    resumeUrl: { type: String, trim: true },
+    resumeFileName: { type: String, trim: true },
+    resumeUpdatedAt: { type: Date },
+    hiringStatus: {
+      type: String,
+      enum: ['actively_looking', 'open_to_offers', 'not_looking'],
+    },
+    availabilityTimeline: {
+      type: String,
+      enum: ['immediate', 'one_to_three_months', 'three_plus_months'],
+    },
     team: {
       type: Schema.Types.ObjectId,
       ref: 'Team',
@@ -104,6 +130,16 @@ const hackathonUserSchema = new Schema<IHackathonUser>(
     totalPoints: {
       type: Number,
       default: 0,
+    },
+    manualPointsBonus: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    isAdmin: {
+      type: Boolean,
+      default: false,
+      index: true,
     },
   },
   { timestamps: true, collection: HACKATHON_COLLECTIONS.users }

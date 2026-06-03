@@ -7,8 +7,6 @@ export const HACKATHON_COLLECTIONS = {
   users: 'hackathon_users',
   teams: 'hackathon_teams',
   submissions: 'hackathon_submissions',
-  tasks: 'hackathon_tasks',
-  taskProgress: 'hackathon_task_progress',
   referrals: 'hackathon_referrals',
   socialProofs: 'hackathon_social_proofs',
   judgeScores: 'hackathon_judge_scores',

@@ -12,6 +12,7 @@ export interface IHackathonConfig extends Document {
   maxJudgePoints: number;
   maxSprintPoints: number;
   bonusPoints: number;
+  socialHashtag: string;
   isActive: boolean;
   createdAt: Date;
 }
@@ -41,15 +42,20 @@ const hackathonConfigSchema = new Schema<IHackathonConfig>(
     },
     maxJudgePoints: {
       type: Number,
-      default: 150,
+      default: 175,
     },
     maxSprintPoints: {
       type: Number,
-      default: 100,
+      default: 75,
     },
     bonusPoints: {
       type: Number,
       default: 20,
+    },
+    socialHashtag: {
+      type: String,
+      default: '#ShipIn100Hrs',
+      trim: true,
     },
     isActive: {
       type: Boolean,

@@ -3,8 +3,12 @@ import { HackathonUser } from '../models/HackathonUser.js';
 import { ApiError } from '../utils/ApiError.js';
 import { generateTeamInviteCode } from '../utils/generateInviteCode.js';
 import { TEAM_MEMBER_FIELDS } from '../utils/teamMembers.js';
+import { syncTeamPoints, clearUserPoints } from './pointsService.js';
 
 const LEADER_FIELDS = TEAM_MEMBER_FIELDS;
+
+/** Captain + one teammate */
+export const MAX_TEAM_MEMBERS = 2;
 
 export interface CreateTeamInput {
   title: string;
@@ -36,6 +40,8 @@ export async function createTeam(input: CreateTeamInput): Promise<ITeam> {
     $set: { team: team._id },
   });
 
+  await syncTeamPoints(team._id.toString());
+
   return team;
 }
 
@@ -54,8 +60,8 @@ export async function joinTeam(inviteCode: string, userId: string): Promise<ITea
     throw ApiError.conflict('You are already a member of this team');
   }
 
-  if (team.members.length >= 4) {
-    throw ApiError.badRequest('Team is full (max 4 members)');
+  if (team.members.length >= MAX_TEAM_MEMBERS) {
+    throw ApiError.conflict('This team is already full.');
   }
 
   const user = await HackathonUser.findById(userId);
@@ -73,6 +79,8 @@ export async function joinTeam(inviteCode: string, userId: string): Promise<ITea
   await HackathonUser.findByIdAndUpdate(userId, {
     $set: { team: team._id },
   });
+
+  await syncTeamPoints(team._id.toString());
 
   return team;
 }
@@ -93,6 +101,9 @@ export async function leaveTeam(teamId: string, userId: string): Promise<void> {
   await HackathonUser.findByIdAndUpdate(userId, {
     $unset: { team: 1 },
   });
+
+  await clearUserPoints(userId);
+  await syncTeamPoints(teamId);
 }
 
 export async function removeMember(teamId: string, memberId: string, requesterId: string): Promise<void> {
@@ -115,6 +126,9 @@ export async function removeMember(teamId: string, memberId: string, requesterId
   await HackathonUser.findByIdAndUpdate(memberId, {
     $unset: { team: 1 },
   });
+
+  await clearUserPoints(memberId);
+  await syncTeamPoints(teamId);
 }
 
 export async function getTeamById(teamId: string): Promise<ITeam | null> {

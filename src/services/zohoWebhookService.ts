@@ -1,7 +1,6 @@
 import { HackathonUser } from '../models/HackathonUser.js';
 import { generateReferralCode } from '../utils/generateCode.js';
 import { ApiError } from '../utils/ApiError.js';
-
 function coerceToString(value: unknown): string | undefined {
   if (value === null || value === undefined) return undefined;
   if (typeof value === 'string' && value.trim()) return value.trim();
@@ -92,30 +91,70 @@ function pickBool(data: Record<string, unknown>, ...keys: string[]): boolean {
   return false;
 }
 
+function splitCombinedName(combined: string): { firstName?: string; lastName?: string } {
+  const parts = combined.split(',').map((p) => p.trim());
+  if (parts.length >= 2) {
+    return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
+  }
+  const spaceParts = combined.trim().split(/\s+/);
+  if (spaceParts.length >= 2) {
+    return {
+      firstName: spaceParts[0],
+      lastName: spaceParts.slice(1).join(' '),
+    };
+  }
+  return { firstName: combined };
+}
+
 /** Zoho export uses single "Name" (e.g. "Sai, N") — split for HackathonUser */
 function parseNameField(data: Record<string, unknown>): {
   firstName?: string;
   lastName?: string;
 } {
-  const combined = pickString(data, 'Name', 'name');
+  const combined = pickString(
+    data,
+    'Name',
+    'name',
+    'Full Name',
+    'full_name',
+    'FULL_NAME',
+    'Your Name',
+    'your_name',
+    'Participant Name',
+    'participant_name'
+  );
   if (combined) {
-    const parts = combined.split(',').map((p) => p.trim());
-    if (parts.length >= 2) {
-      return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
-    }
-    const spaceParts = combined.trim().split(/\s+/);
-    if (spaceParts.length >= 2) {
-      return {
-        firstName: spaceParts[0],
-        lastName: spaceParts.slice(1).join(' '),
-      };
-    }
-    return { firstName: combined };
+    return splitCombinedName(combined);
   }
-  const firstName = pickString(data, 'First Name', 'FirstName', 'first_name');
-  const lastName = pickString(data, 'Last Name', 'LastName', 'last_name');
+
+  const firstName = pickString(
+    data,
+    'First Name',
+    'FirstName',
+    'first_name',
+    'Given Name',
+    'given_name'
+  );
+  const lastName = pickString(
+    data,
+    'Last Name',
+    'LastName',
+    'last_name',
+    'Family Name',
+    'family_name',
+    'Surname',
+    'surname'
+  );
   if (firstName || lastName) {
     return { firstName, lastName };
+  }
+
+  // Any Auto-Map key containing "name" (e.g. "Legal Name") except company/university fields
+  for (const [key, value] of Object.entries(data)) {
+    if (!/name/i.test(key) || /company|university|team|user|email/i.test(key)) continue;
+    const s = coerceToString(value);
+    if (!s || looksLikeEmail(s)) continue;
+    return splitCombinedName(s);
   }
 
   // Zoho sample / unmapped webhooks: Field_1 = first name, Field_2 = last name
@@ -129,6 +168,18 @@ function parseNameField(data: Record<string, unknown>): {
   }
 
   return {};
+}
+
+function applyParsedName(
+  target: { firstName?: string; lastName?: string },
+  parsed: { firstName?: string; lastName?: string }
+): void {
+  if (parsed.firstName?.trim()) {
+    target.firstName = parsed.firstName.trim();
+  }
+  if (parsed.lastName?.trim()) {
+    target.lastName = parsed.lastName.trim();
+  }
 }
 
 /** Zoho "Address" often "City, ST" in one field */
@@ -209,14 +260,12 @@ export async function upsertFromZohoWebhook(data: Record<string, unknown>) {
     );
   }
 
-  const { firstName, lastName } = parseNameField(data);
+  const parsedName = parseNameField(data);
   const { city, state } = parseAddressField(data);
   const zohoSubmissionId = pickString(data, 'submission_id', 'Submission ID', 'record_id', 'ID');
 
   const update = {
     email,
-    firstName,
-    lastName,
     phone:
       pickString(data, 'Phone', 'phone') ??
       (hasGenericFieldKeys(data) ? pickString(data, 'Field_4') : undefined),
@@ -283,17 +332,20 @@ export async function upsertFromZohoWebhook(data: Record<string, unknown>) {
 
   if (existing) {
     Object.assign(existing, update);
+    applyParsedName(existing, parsedName);
     if (!existing.referralCode) {
-      existing.referralCode = generateReferralCode(firstName || email);
+      existing.referralCode = generateReferralCode(parsedName.firstName || email);
     }
     await existing.save();
     return { user: existing, created: false };
   }
 
-  const user = await HackathonUser.create({
+  const user = new HackathonUser({
     ...update,
-    referralCode: generateReferralCode(firstName || email),
+    referralCode: generateReferralCode(parsedName.firstName || email),
   });
+  applyParsedName(user, parsedName);
+  await user.save();
 
   return { user, created: true };
 }

@@ -5,7 +5,6 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 import authRoutes from './routes/auth.js';
 import teamRoutes from './routes/teams.js';
-import taskRoutes from './routes/tasks.js';
 import submissionRoutes from './routes/submissions.js';
 import leaderboardRoutes from './routes/leaderboard.js';
 import referralRoutes from './routes/referrals.js';
@@ -13,7 +12,9 @@ import announcementRoutes from './routes/announcements.js';
 import socialProofRoutes from './routes/socialProof.js';
 import adminRoutes from './routes/admin.js';
 import configRoutes from './routes/config.js';
+import assetRoutes from './routes/assets.js';
 import hackathonRoutes from './routes/hackathon.js';
+import hackathonAdminRoutes from './routes/hackathonAdmin.js';
 import webhookRoutes from './routes/webhooks.js';
 import { getEnv } from './config/env.js';
 
@@ -41,7 +42,6 @@ export function createApp(): Application {
 
   app.use('/api/auth', authRoutes);
   app.use('/api/teams', teamRoutes);
-  app.use('/api/tasks', taskRoutes);
   app.use('/api/submissions', submissionRoutes);
   app.use('/api/leaderboard', leaderboardRoutes);
   app.use('/api/referrals', referralRoutes);
@@ -49,7 +49,9 @@ export function createApp(): Application {
   app.use('/api/social-proof', socialProofRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/config', configRoutes);
+  app.use('/api/assets', assetRoutes);
   app.use('/api/hackathon', hackathonRoutes);
+  app.use('/api/hackathon/admin', hackathonAdminRoutes);
   app.use('/api/webhooks', webhookRoutes);
 
   app.use(notFoundHandler);

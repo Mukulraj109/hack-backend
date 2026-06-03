@@ -15,6 +15,7 @@ export interface ITeam extends Document {
   isFinalist: boolean;
   isWinner: boolean;
   totalPoints: number;
+  manualPointsBonus: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -66,6 +67,11 @@ const teamSchema = new Schema<ITeam>(
     totalPoints: {
       type: Number,
       default: 0,
+    },
+    manualPointsBonus: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
   },
   {

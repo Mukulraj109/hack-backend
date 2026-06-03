@@ -1,47 +1,72 @@
 import { Response } from 'express';
 import { z } from 'zod';
-import multer from 'multer';
-import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
-import { Submission, Team } from '../models/index.js';
+import { HackathonUser, Submission, Team } from '../models/index.js';
+import { ISubmission } from '../models/Submission.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { AuthenticatedRequest } from '../types/express/index.js';
-import { getStorageBucket } from '../config/firebase.js';
-import { assertSubmissionAccess, submissionStorageKey } from '../utils/submissionAccess.js';
+import { assertSubmissionAccess } from '../utils/submissionAccess.js';
+
+const optionalUrl = z.union([z.string().url(), z.literal('')]).optional();
 
 export const createSubmissionSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
-  repoUrl: z.string().url().optional(),
-  demoUrl: z.string().url().optional(),
-  deckUrl: z.string().url().optional(),
+  repoUrl: optionalUrl,
+  demoUrl: optionalUrl,
+  deckUrl: optionalUrl,
+  technicalRoadblock: z.string().optional(),
+  sponsorApis: z.string().optional(),
+  supplementaryZipConfirmed: z.boolean().optional(),
   track: z.string().min(1, 'Track is required'),
 });
 
 export const updateSubmissionSchema = createSubmissionSchema.partial();
 
-const ALLOWED_TYPES = ['application/pdf', 'application/zip', 'application/x-zip-compressed', 'video/mp4'];
-const MAX_SIZE = 250 * 1024 * 1024; // 250MB
-
-const storage = multer.memoryStorage();
-const upload = multer({
-  storage,
-  limits: { fileSize: MAX_SIZE },
-  fileFilter: (_req, file, cb) => {
-    if (ALLOWED_TYPES.includes(file.mimetype) || file.originalname.match(/\.(pdf|zip|mp4)$/i)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Invalid file type. Only PDF, ZIP, and MP4 are allowed.'));
+function normalizeOptionalUrls(body: Record<string, unknown>): void {
+  for (const key of ['repoUrl', 'demoUrl', 'deckUrl'] as const) {
+    if (body[key] === '') {
+      body[key] = undefined;
     }
-  },
-});
+  }
+}
 
-export const uploadMiddleware = upload.single('file');
+async function validateFinalizeRequirements(userId: string, submission: ISubmission): Promise<void> {
+  const user = await HackathonUser.findById(userId);
+  if (!user) {
+    throw ApiError.notFound('User not found');
+  }
+
+  const missing: string[] = [];
+
+  if (!user.linkedinUrl) missing.push('LinkedIn profile URL');
+  if (!user.resumeUrl) missing.push('Resume');
+  if (!user.hiringStatus) missing.push('Hiring status');
+  if (!user.availabilityTimeline) missing.push('Availability timeline');
+
+  if (!submission.repoUrl) missing.push('GitHub repository URL');
+  if (!submission.demoUrl) missing.push('Demo video link');
+  if (!submission.description || submission.description.trim().length < 50) {
+    missing.push('Solution one-pager (at least 50 characters)');
+  }
+  if (!submission.technicalRoadblock?.trim()) {
+    missing.push('Technical roadblock answer');
+  }
+  if (!submission.sponsorApis?.trim()) missing.push('Sponsor APIs answer');
+  if (!submission.supplementaryZipConfirmed) {
+    missing.push('Confirmation that your ZIP was emailed to the hackathon inbox');
+  }
+  if (!submission.track) missing.push('Track');
+
+  if (missing.length > 0) {
+    throw ApiError.badRequest(`Complete required fields before locking in: ${missing.join(', ')}`);
+  }
+}
 
 export const createSubmission = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   if (!req.user) throw ApiError.unauthorized();
 
+  normalizeOptionalUrls(req.body);
   const userId = req.user.userId;
   const team = await Team.findOne({ members: userId });
 
@@ -83,6 +108,7 @@ export const createSubmission = asyncHandler(async (req: AuthenticatedRequest, r
 export const updateSubmission = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   if (!req.user) throw ApiError.unauthorized();
 
+  normalizeOptionalUrls(req.body);
   const { id } = req.params;
   const submission = await Submission.findById(id);
 
@@ -105,53 +131,6 @@ export const updateSubmission = asyncHandler(async (req: AuthenticatedRequest, r
   });
 });
 
-export const uploadFile = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  if (!req.user) throw ApiError.unauthorized();
-  if (!req.file) {
-    throw ApiError.badRequest('No file uploaded');
-  }
-
-  const { id } = req.params;
-  const submission = await Submission.findById(id);
-
-  if (!submission) {
-    throw ApiError.notFound('Submission not found');
-  }
-
-  await assertSubmissionAccess(req.user.userId, submission);
-
-  const fileName = `${uuidv4()}_${req.file.originalname}`;
-  const bucket = getStorageBucket();
-  const file = bucket.file(`submissions/${submissionStorageKey(submission)}/${fileName}`);
-
-  await file.save(req.file.buffer, {
-    metadata: {
-      contentType: req.file.mimetype,
-    },
-  });
-
-  await file.makePublic();
-
-  const url =
-    typeof file.publicUrl === 'function'
-      ? file.publicUrl()
-      : `https://storage.googleapis.com/${bucket.name}/${file.name}`;
-
-  submission.fileUrl = url;
-  submission.fileName = req.file.originalname;
-  submission.fileSize = req.file.size;
-  await submission.save();
-
-  res.json({
-    success: true,
-    data: {
-      fileUrl: url,
-      fileName: req.file.originalname,
-      fileSize: req.file.size,
-    },
-  });
-});
-
 export const finalizeSubmission = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   if (!req.user) throw ApiError.unauthorized();
 
@@ -168,9 +147,7 @@ export const finalizeSubmission = asyncHandler(async (req: AuthenticatedRequest,
     throw ApiError.badRequest('Submission already finalized');
   }
 
-  if (!submission.fileUrl) {
-    throw ApiError.badRequest('Please upload a file before finalizing');
-  }
+  await validateFinalizeRequirements(req.user.userId, submission);
 
   submission.status = 'submitted';
   submission.submittedAt = new Date();
@@ -184,13 +161,16 @@ export const finalizeSubmission = asyncHandler(async (req: AuthenticatedRequest,
 });
 
 export const getSubmission = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  if (!req.user) throw ApiError.unauthorized();
+
   const { id } = req.params;
-  const submission = await Submission.findById(id)
-    .populate('team', 'title track members');
+  const submission = await Submission.findById(id).populate('team', 'title track members');
 
   if (!submission) {
     throw ApiError.notFound('Submission not found');
   }
+
+  await assertSubmissionAccess(req.user.userId, submission);
 
   res.json({
     success: true,

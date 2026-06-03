@@ -2,32 +2,42 @@ import mongoose, { Document, Schema, Model } from 'mongoose';
 import { mongooseToJsonTransform } from '../utils/mongooseToJson.js';
 import { HACKATHON_COLLECTIONS } from './collections.js';
 
+export type SocialPlatform = 'instagram' | 'linkedin';
+
 export interface ISocialProof extends Document {
   _id: mongoose.Types.ObjectId;
-  user: mongoose.Types.ObjectId;
-  platform: 'instagram' | 'linkedin' | 'twitter';
+  team: mongoose.Types.ObjectId;
+  submittedBy: mongoose.Types.ObjectId;
+  platform: SocialPlatform;
   postUrl: string;
-  screenshotUrl?: string;
+  screenshotUrl: string;
+  templateId?: string;
   hashtag?: string;
   status: 'pending' | 'verified' | 'rejected';
   verifiedAt?: Date;
   verifiedBy?: mongoose.Types.ObjectId;
   pointsEarned: number;
   createdAt: Date;
+  updatedAt: Date;
 }
 
 const socialProofSchema = new Schema<ISocialProof>(
   {
-    user: {
+    team: {
+      type: Schema.Types.ObjectId,
+      ref: 'Team',
+      required: true,
+      index: true,
+    },
+    submittedBy: {
       type: Schema.Types.ObjectId,
       ref: 'HackathonUser',
       required: true,
-      index: true,
     },
     platform: {
       type: String,
       required: true,
-      enum: ['instagram', 'linkedin', 'twitter'],
+      enum: ['instagram', 'linkedin'],
     },
     postUrl: {
       type: String,
@@ -35,9 +45,15 @@ const socialProofSchema = new Schema<ISocialProof>(
     },
     screenshotUrl: {
       type: String,
+      required: true,
+    },
+    templateId: {
+      type: String,
+      trim: true,
     },
     hashtag: {
       type: String,
+      trim: true,
     },
     status: {
       type: String,
@@ -49,11 +65,11 @@ const socialProofSchema = new Schema<ISocialProof>(
     },
     verifiedBy: {
       type: Schema.Types.ObjectId,
-      ref: 'User',
+      ref: 'HackathonUser',
     },
     pointsEarned: {
       type: Number,
-      default: 50,
+      default: 25,
     },
   },
   {
@@ -61,6 +77,8 @@ const socialProofSchema = new Schema<ISocialProof>(
     collection: HACKATHON_COLLECTIONS.socialProofs,
   }
 );
+
+socialProofSchema.index({ team: 1, platform: 1 }, { unique: true });
 
 socialProofSchema.set('toJSON', {
   transform: mongooseToJsonTransform,

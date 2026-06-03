@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
+import multer from 'multer';
 import { ApiError } from '../utils/ApiError.js';
 import { getEnv } from '../config/env.js';
 
@@ -19,10 +20,56 @@ export function errorHandler(
     return;
   }
 
+  // express-oauth2-jwt-bearer (InvalidTokenError, etc.) — avoid logging as 500
+  const statusCode =
+    err && typeof err === 'object' && 'statusCode' in err
+      ? Number((err as { statusCode: unknown }).statusCode)
+      : NaN;
+  if (statusCode === 401 || statusCode === 403) {
+    const message =
+      /exp.*claim|timestamp check failed/i.test(err.message)
+        ? 'Session expired. Please log in again.'
+        : err.message;
+    res.status(statusCode).json({ success: false, error: message });
+    return;
+  }
+
   if (err instanceof mongoose.Error.ValidationError) {
     res.status(400).json({
       success: false,
       error: err.message,
+    });
+    return;
+  }
+
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      res.status(413).json({
+        success: false,
+        error: 'Uploaded file is too large.',
+      });
+      return;
+    }
+
+    res.status(400).json({
+      success: false,
+      error: err.message || 'Invalid file upload.',
+    });
+    return;
+  }
+
+  if (/^Invalid file type/i.test(err.message) || /^Invalid image type/i.test(err.message)) {
+    res.status(400).json({
+      success: false,
+      error: err.message,
+    });
+    return;
+  }
+
+  if (err.message === 'Firebase is not initialized') {
+    res.status(503).json({
+      success: false,
+      error: 'File uploads are temporarily unavailable. Storage is not configured.',
     });
     return;
   }

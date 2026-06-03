@@ -16,7 +16,7 @@ services:
       - key: MONGODB_DATABASE
         value: firststep_db
       - key: SKIP_FIREBASE
-        value: "true"
+        value: "false"
       # Set these in Render Dashboard (Environment) — do not commit real values:
       - key: MONGODB_URI
         sync: false
@@ -31,4 +31,14 @@ services:
       - key: CORS_ORIGIN
         sync: false
       - key: ZOHO_WEBHOOK_SECRET
+        sync: false
+      - key: ZOHO_REGISTRATION_FORM_URL
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_STORAGE_BUCKET
         sync: false

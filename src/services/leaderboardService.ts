@@ -1,4 +1,5 @@
-import { Team, HackathonUser, JudgeScore } from '../models/index.js';
+import { Team, HackathonUser } from '../models/index.js';
+import { calculateTeamPoints, getPointsCaps } from './pointsService.js';
 
 export interface LeaderboardEntry {
   rank: number;
@@ -28,26 +29,11 @@ export async function getLeaderboard(currentUserId?: string): Promise<Leaderboar
     .populate('leader', 'firstName lastName email')
     .populate('members', 'firstName lastName email');
 
-  const config = {
-    maxPoints: 250,
-    maxJudgePoints: 150,
-    maxSprintPoints: 100,
-  };
+  const caps = await getPointsCaps();
 
   const rankedTeams = await Promise.all(
     teams.map(async (team) => {
-      let judgePoints = 0;
-
-      if (team.submissions && team.submissions.length > 0) {
-        const judgeScores = await JudgeScore.find({
-          submission: { $in: team.submissions },
-        });
-
-        judgePoints = judgeScores.reduce((sum, score) => sum + (score.totalScore || 0), 0);
-      }
-
-      const taskPoints = team.totalPoints || 0;
-      const totalPoints = taskPoints + judgePoints;
+      const totalPoints = await calculateTeamPoints(team._id.toString());
 
       let note: string | undefined;
       if (totalPoints >= 200) {
@@ -101,7 +87,7 @@ export async function getLeaderboard(currentUserId?: string): Promise<Leaderboar
             rank: userTeam.rank,
             teamName: userTeam.teamName,
             points: userTeam.points,
-            maxPoints: config.maxPoints,
+            maxPoints: caps.maxPoints,
           };
         }
       }
@@ -118,12 +104,22 @@ export async function getTopTeams(count: number = 10): Promise<LeaderboardEntry[
 
 export async function getUserRank(
   userId: string
-): Promise<{ rank: number; points: number } | null> {
-  const result = await getLeaderboard(userId);
-  if (!result.currentUser) return null;
+): Promise<{ rank: number; points: number; maxPoints: number } | null> {
+  const memberTeam = await Team.findOne({ members: userId }).select('_id totalPoints');
+  if (!memberTeam) return null;
+
+  const caps = await getPointsCaps();
+  const points = memberTeam.totalPoints ?? 0;
+
+  const higherRankCount = await Team.countDocuments({ totalPoints: { $gt: points } });
+  const tieBreakCount = await Team.countDocuments({
+    totalPoints: points,
+    _id: { $lt: memberTeam._id },
+  });
 
   return {
-    rank: result.currentUser.rank,
-    points: result.currentUser.points,
+    rank: higherRankCount + tieBreakCount + 1,
+    points,
+    maxPoints: caps.maxPoints,
   };
 }

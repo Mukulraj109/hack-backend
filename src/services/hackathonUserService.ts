@@ -15,10 +15,18 @@ export function toSessionUser(user: IHackathonUser): HackathonSessionUser {
     email: user.email,
     firstName: user.firstName,
     lastName: user.lastName,
+    headshotUrl: user.headshotUrl,
+    linkedinUrl: user.linkedinUrl,
+    resumeUrl: user.resumeUrl,
+    resumeFileName: user.resumeFileName,
+    hiringStatus: user.hiringStatus,
+    availabilityTimeline: user.availabilityTimeline,
     accountStatus: user.accountStatus,
     hasRegistration: hasRegistration(user),
     teamId: user.team?.toString(),
     canWrite: canWritePortal(user),
+    totalPoints: user.totalPoints ?? 0,
+    isAdmin: user.isAdmin ?? false,
   };
 }
 

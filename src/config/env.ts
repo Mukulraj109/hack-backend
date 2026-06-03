@@ -17,6 +17,8 @@ export const envSchema = z.object({
   USERMANAGEMENT_API_AUTH0_DOMAIN: z.string().optional(),
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
   ZOHO_WEBHOOK_SECRET: z.string().optional(),
+  /** Server-only Zoho hackathon registration form permalink (never expose to frontend). */
+  ZOHO_REGISTRATION_FORM_URL: z.string().optional(),
   SKIP_FIREBASE: z
     .string()
     .optional()
@@ -50,6 +52,7 @@ export function getEnv(): Env {
     USERMANAGEMENT_API_AUTH0_DOMAIN: process.env.USERMANAGEMENT_API_AUTH0_DOMAIN,
     CORS_ORIGIN: process.env.CORS_ORIGIN,
     ZOHO_WEBHOOK_SECRET: process.env.ZOHO_WEBHOOK_SECRET,
+    ZOHO_REGISTRATION_FORM_URL: process.env.ZOHO_REGISTRATION_FORM_URL,
     SKIP_FIREBASE: process.env.SKIP_FIREBASE,
     FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID,
     FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY,

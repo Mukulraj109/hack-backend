@@ -8,7 +8,7 @@ const router = Router();
 
 router.get('/', authenticate, requireAdmin, submissionController.getAllSubmissions);
 router.get('/my', ...hackerAuth, submissionController.getMySubmission);
-router.get('/:id', submissionController.getSubmission);
+router.get('/:id', ...hackerAuth, submissionController.getSubmission);
 
 router.post(
   '/',
@@ -22,13 +22,6 @@ router.put(
   ...hackerWrite,
   validate(submissionController.updateSubmissionSchema),
   submissionController.updateSubmission
-);
-
-router.post(
-  '/:id/upload',
-  ...hackerWrite,
-  submissionController.uploadMiddleware,
-  submissionController.uploadFile
 );
 
 router.post('/:id/finalize', ...hackerWrite, submissionController.finalizeSubmission);

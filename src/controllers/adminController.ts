@@ -180,7 +180,7 @@ export const scoreSubmission = asyncHandler(async (req: AuthenticatedRequest, re
 
   const team = await Team.findById(submission.team);
   if (team) {
-    await pointsService.calculateTeamPoints(team._id.toString());
+    await pointsService.syncTeamPoints(team._id.toString());
   }
 
   res.json({

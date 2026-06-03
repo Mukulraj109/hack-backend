@@ -42,8 +42,25 @@ function emailFromPayload(payload: Record<string, unknown>): string | undefined 
   return undefined;
 }
 
+function auth0TokenErrorMessage(err: unknown): string {
+  const message =
+    err && typeof err === 'object' && 'message' in err
+      ? String((err as Error).message)
+      : 'Invalid token';
+  if (/exp.*claim|timestamp check failed/i.test(message)) {
+    return 'Session expired. Please log in again.';
+  }
+  return message;
+}
+
 export const validateAuth0Token = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-  getJwtCheck()(req, res, next);
+  getJwtCheck()(req, res, (err: unknown) => {
+    if (err) {
+      next(ApiError.unauthorized(auth0TokenErrorMessage(err)));
+      return;
+    }
+    next();
+  });
 };
 
 /** Attach hacker if Bearer token is valid; continue anonymously if missing/invalid */
@@ -123,14 +140,26 @@ export const loadHackathonUser = async (
         referralCode: generateReferralCode(name),
       });
     } else {
+      const nameFromZoho = Boolean(user.registrationCompletedAt || user.zohoSubmissionId);
       let dirty = false;
-      if (payload.given_name && user.firstName !== payload.given_name) {
-        user.firstName = payload.given_name as string;
-        dirty = true;
-      }
-      if (payload.family_name && user.lastName !== payload.family_name) {
-        user.lastName = payload.family_name as string;
-        dirty = true;
+      if (!nameFromZoho) {
+        if (payload.given_name && user.firstName !== payload.given_name) {
+          user.firstName = payload.given_name as string;
+          dirty = true;
+        }
+        if (payload.family_name && user.lastName !== payload.family_name) {
+          user.lastName = payload.family_name as string;
+          dirty = true;
+        }
+      } else {
+        if (!user.firstName && payload.given_name) {
+          user.firstName = payload.given_name as string;
+          dirty = true;
+        }
+        if (!user.lastName && payload.family_name) {
+          user.lastName = payload.family_name as string;
+          dirty = true;
+        }
       }
       if (dirty) {
         await user.save();
@@ -184,5 +213,18 @@ export function requireRegistration(
   next();
 }
 
+export function requireHackathonAdmin(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): void {
+  if (!req.hackathonUser?.isAdmin) {
+    next(ApiError.forbidden('Admin access required'));
+    return;
+  }
+  next();
+}
+
 export const hackerAuth = [validateAuth0Token, loadHackathonUser] as const;
 export const hackerWrite = [validateAuth0Token, loadHackathonUser, requireActiveAccount] as const;
+export const hackerAdmin = [validateAuth0Token, loadHackathonUser, requireHackathonAdmin] as const;

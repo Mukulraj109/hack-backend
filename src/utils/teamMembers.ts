@@ -3,7 +3,7 @@ import { IHackathonUser } from '../models/HackathonUser.js';
 import mongoose from 'mongoose';
 
 export const TEAM_MEMBER_FIELDS =
-  'firstName lastName email linkedinUrl githubUrl universityName currentCompanyName';
+  'firstName lastName email linkedinUrl githubUrl universityName currentCompanyName headshotUrl';
 
 export interface TeamMemberDto {
   id: string;
@@ -14,13 +14,21 @@ export interface TeamMemberDto {
   githubUrl?: string;
   universityName?: string;
   currentCompanyName?: string;
+  headshotUrl?: string;
   isLeader: boolean;
   isCurrentUser: boolean;
 }
 
 type PopulatedUser = Pick<
   IHackathonUser,
-  'firstName' | 'lastName' | 'email' | 'linkedinUrl' | 'githubUrl' | 'universityName' | 'currentCompanyName'
+  | 'firstName'
+  | 'lastName'
+  | 'email'
+  | 'linkedinUrl'
+  | 'githubUrl'
+  | 'universityName'
+  | 'currentCompanyName'
+  | 'headshotUrl'
 > & { _id: mongoose.Types.ObjectId };
 
 function resolveLeaderId(team: ITeam): string {
@@ -57,6 +65,7 @@ export function formatTeamMembers(
       githubUrl: populated.githubUrl,
       universityName: populated.universityName,
       currentCompanyName: populated.currentCompanyName,
+      headshotUrl: populated.headshotUrl,
       isLeader: id === leaderId,
       isCurrentUser: id === currentUserId,
     };
