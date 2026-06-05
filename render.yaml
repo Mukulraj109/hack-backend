@@ -32,8 +32,29 @@ services:
         sync: false
       - key: ZOHO_WEBHOOK_SECRET
         sync: false
+      # Zoho form URLs
       - key: ZOHO_REGISTRATION_FORM_URL
         sync: false
+      - key: ZOHO_FOLLOW_FORM_URL
+        sync: false
+      - key: ZOHO_HIRING_PARTNER_FORM_URL
+        sync: false
+      - key: ZOHO_INFO_SESSION_FORM_URL
+        sync: false
+      - key: ZOHO_SOCIAL_SHARE_FORM_URL
+        sync: false
+      # Zoho social webhook fields
+      - key: ZOHO_SOCIAL_WEBHOOK_FIELD_PLATFORM
+        value: "Field_5"
+      - key: ZOHO_SOCIAL_WEBHOOK_FIELD_POST_URL
+        value: "Field_7"
+      - key: ZOHO_SOCIAL_WEBHOOK_FIELD_SCREENSHOT
+        value: "Field_8"
+      - key: ZOHO_SOCIAL_WEBHOOK_FIELD_POST_URL_LINKEDIN
+        value: "Field_9"
+      - key: ZOHO_SOCIAL_WEBHOOK_FIELD_SCREENSHOT_LINKEDIN
+        value: "Field_10"
+      # Firebase
       - key: FIREBASE_PROJECT_ID
         sync: false
       - key: FIREBASE_PRIVATE_KEY
