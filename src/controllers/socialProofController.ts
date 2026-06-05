@@ -127,86 +127,10 @@ export const getTeamSocialProofs = asyncHandler(async (req: AuthenticatedRequest
 });
 
 export const submitTeamSocialProof = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  const user = req.hackathonUser;
-  if (!user) {
-    throw ApiError.unauthorized();
-  }
-
-  const { teamId } = req.params;
-  await assertTeamMember(teamId, user._id.toString());
-
-  const platform = req.body.platform as string;
-  if (platform !== 'instagram' && platform !== 'linkedin') {
-    throw ApiError.badRequest('Platform must be instagram or linkedin');
-  }
-
-  const postUrl = typeof req.body.postUrl === 'string' ? req.body.postUrl.trim() : '';
-  if (!postUrl) {
-    throw ApiError.badRequest('Post URL is required');
-  }
-
-  try {
-    new URL(postUrl);
-  } catch {
-    throw ApiError.badRequest('Invalid post URL');
-  }
-
-  if (!req.file) {
-    throw ApiError.badRequest('No image uploaded. Use form field name `screenshot`.');
-  }
-
-  const templateId =
-    typeof req.body.templateId === 'string' ? req.body.templateId.trim() : undefined;
-
-  const config = await HackathonConfig.findOne({ isActive: true });
-  const hashtag = config?.socialHashtag ?? '#ShipIn100Hrs';
-
-  const screenshotUrl = await uploadScreenshotToFirebase(teamId, platform, req.file);
-
-  const existing = await SocialProof.findOne({ team: teamId, platform });
-
-  if (existing?.status === 'verified') {
-    throw ApiError.conflict('This platform is already verified for your team');
-  }
-
-  let proof;
-
-  if (!existing) {
-    proof = await SocialProof.create({
-      team: teamId,
-      submittedBy: user._id,
-      platform,
-      postUrl,
-      screenshotUrl,
-      templateId,
-      hashtag,
-      status: 'pending',
-    });
-  } else if (existing.status === 'pending' || existing.status === 'rejected') {
-    existing.postUrl = postUrl;
-    existing.screenshotUrl = screenshotUrl;
-    existing.submittedBy = user._id;
-    existing.templateId = templateId;
-    existing.hashtag = hashtag;
-    existing.status = 'pending';
-    existing.verifiedAt = undefined;
-    existing.verifiedBy = undefined;
-    existing.pointsEarned = SOCIAL_PLATFORM_POINTS;
-    await existing.save();
-    proof = existing;
-  } else {
-    throw ApiError.conflict('Cannot update proof in current status');
-  }
-
-  const populated = await SocialProof.findById(proof._id).populate(
-    'submittedBy',
-    'firstName lastName email'
-  );
-
-  res.status(existing ? 200 : 201).json({
-    success: true,
-    data: populated,
-    message: 'Social proof submitted for review',
+  res.status(410).json({
+    success: false,
+    message:
+      'In-app social proof upload is no longer supported. Submit proof via the verification form on the Points Tracker or Team page.',
   });
 });
 

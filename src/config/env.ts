@@ -19,6 +19,20 @@ export const envSchema = z.object({
   ZOHO_WEBHOOK_SECRET: z.string().optional(),
   /** Server-only Zoho hackathon registration form permalink (never expose to frontend). */
   ZOHO_REGISTRATION_FORM_URL: z.string().optional(),
+  /** Server-only Zoho hackathon follow form permalink (never expose to frontend). */
+  ZOHO_FOLLOW_FORM_URL: z.string().optional(),
+  /** Server-only Zoho hiring partner form permalink (never expose to frontend). */
+  ZOHO_HIRING_PARTNER_FORM_URL: z.string().optional(),
+  /** Server-only Zoho information session form permalink (never expose to frontend). */
+  ZOHO_INFO_SESSION_FORM_URL: z.string().optional(),
+  /** Server-only Zoho social share verification form (Instagram / LinkedIn). */
+  ZOHO_SOCIAL_SHARE_FORM_URL: z.string().optional(),
+  /** Zoho webhook payload keys when form uses Field_1…Field_N (see ZOHO-WEBHOOK-SETUP.md). */
+  ZOHO_SOCIAL_WEBHOOK_FIELD_PLATFORM: z.string().optional(),
+  ZOHO_SOCIAL_WEBHOOK_FIELD_POST_URL: z.string().optional(),
+  ZOHO_SOCIAL_WEBHOOK_FIELD_SCREENSHOT: z.string().optional(),
+  ZOHO_SOCIAL_WEBHOOK_FIELD_POST_URL_LINKEDIN: z.string().optional(),
+  ZOHO_SOCIAL_WEBHOOK_FIELD_SCREENSHOT_LINKEDIN: z.string().optional(),
   SKIP_FIREBASE: z
     .string()
     .optional()
@@ -53,6 +67,17 @@ export function getEnv(): Env {
     CORS_ORIGIN: process.env.CORS_ORIGIN,
     ZOHO_WEBHOOK_SECRET: process.env.ZOHO_WEBHOOK_SECRET,
     ZOHO_REGISTRATION_FORM_URL: process.env.ZOHO_REGISTRATION_FORM_URL,
+    ZOHO_FOLLOW_FORM_URL: process.env.ZOHO_FOLLOW_FORM_URL,
+    ZOHO_HIRING_PARTNER_FORM_URL: process.env.ZOHO_HIRING_PARTNER_FORM_URL,
+    ZOHO_INFO_SESSION_FORM_URL: process.env.ZOHO_INFO_SESSION_FORM_URL,
+    ZOHO_SOCIAL_SHARE_FORM_URL: process.env.ZOHO_SOCIAL_SHARE_FORM_URL,
+    ZOHO_SOCIAL_WEBHOOK_FIELD_PLATFORM: process.env.ZOHO_SOCIAL_WEBHOOK_FIELD_PLATFORM,
+    ZOHO_SOCIAL_WEBHOOK_FIELD_POST_URL: process.env.ZOHO_SOCIAL_WEBHOOK_FIELD_POST_URL,
+    ZOHO_SOCIAL_WEBHOOK_FIELD_SCREENSHOT: process.env.ZOHO_SOCIAL_WEBHOOK_FIELD_SCREENSHOT,
+    ZOHO_SOCIAL_WEBHOOK_FIELD_POST_URL_LINKEDIN:
+      process.env.ZOHO_SOCIAL_WEBHOOK_FIELD_POST_URL_LINKEDIN,
+    ZOHO_SOCIAL_WEBHOOK_FIELD_SCREENSHOT_LINKEDIN:
+      process.env.ZOHO_SOCIAL_WEBHOOK_FIELD_SCREENSHOT_LINKEDIN,
     SKIP_FIREBASE: process.env.SKIP_FIREBASE,
     FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID,
     FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY,

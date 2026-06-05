@@ -18,7 +18,7 @@ function coerceToString(value: unknown): string | undefined {
   return undefined;
 }
 
-function pickString(data: Record<string, unknown>, ...keys: string[]): string | undefined {
+export function pickString(data: Record<string, unknown>, ...keys: string[]): string | undefined {
   for (const key of keys) {
     const val = coerceToString(data[key]);
     if (val) return val;
@@ -42,7 +42,7 @@ function sortedFieldEntries(data: Record<string, unknown>): [string, unknown][] 
 }
 
 /** Zoho Auto-Map, labeled fields, or generic Field_1…Field_N (incl. test webhook). */
-function pickEmail(data: Record<string, unknown>): string | undefined {
+export function pickEmail(data: Record<string, unknown>): string | undefined {
   const direct = pickString(
     data,
     'Email',

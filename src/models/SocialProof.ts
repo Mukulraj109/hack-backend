@@ -3,6 +3,7 @@ import { mongooseToJsonTransform } from '../utils/mongooseToJson.js';
 import { HACKATHON_COLLECTIONS } from './collections.js';
 
 export type SocialPlatform = 'instagram' | 'linkedin';
+export type SocialProofSource = 'zoho' | 'app';
 
 export interface ISocialProof extends Document {
   _id: mongoose.Types.ObjectId;
@@ -17,6 +18,8 @@ export interface ISocialProof extends Document {
   verifiedAt?: Date;
   verifiedBy?: mongoose.Types.ObjectId;
   pointsEarned: number;
+  zohoSubmissionId?: string;
+  source?: SocialProofSource;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -70,6 +73,17 @@ const socialProofSchema = new Schema<ISocialProof>(
     pointsEarned: {
       type: Number,
       default: 25,
+    },
+    zohoSubmissionId: {
+      type: String,
+      trim: true,
+      sparse: true,
+      unique: true,
+    },
+    source: {
+      type: String,
+      enum: ['zoho', 'app'],
+      default: 'zoho',
     },
   },
   {
