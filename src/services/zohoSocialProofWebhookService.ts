@@ -5,14 +5,29 @@ import { pickEmail, pickString } from './zohoWebhookService.js';
 import { ApiError } from '../utils/ApiError.js';
 import { SOCIAL_PLATFORM_POINTS } from './pointsService.js';
 
-/** Default Zoho field keys when Auto-Map uses Field_1…Field_N (adjust via env if your form order differs). */
-const DEFAULT_FIELD_KEYS = {
-  platform: 'Field_5',
-  postUrl: 'Field_7',
-  screenshot: 'Field_8',
-  postUrlLinkedIn: 'Field_9',
-  screenshotLinkedIn: 'Field_10',
+/**
+ * Claim Your Viral Points form layout (no Platform dropdown):
+ * - Field_7 / Field_8  → LinkedIn post link + screenshot
+ * - Field_9 / Field_10 → Instagram profile/post link + screenshot
+ */
+const DEFAULT_PLATFORM_BLOCKS = {
+  linkedin: { postUrl: 'Field_7', screenshot: 'Field_8' },
+  instagram: { postUrl: 'Field_9', screenshot: 'Field_10' },
 } as const;
+
+const LABELED_PLATFORM_BLOCKS: Record<
+  SocialPlatform,
+  { postUrl: string[]; screenshot: string[] }
+> = {
+  linkedin: {
+    postUrl: ['LinkedIn Post Link', 'Linkedin Post Link', 'linkedin_post_link'],
+    screenshot: ['Linkedin Post Upload', 'LinkedIn Post Upload', 'linkedin_post_upload'],
+  },
+  instagram: {
+    postUrl: ['Instagram Profile Link', 'Instagram Post Link', 'instagram_profile_link'],
+    screenshot: ['Instagram Post Upload', 'instagram_post_upload'],
+  },
+};
 
 const HTTP_URL_PATTERN = /^https?:\/\/.+/i;
 const LOOSE_URL_PATTERN = /^(?:https?:\/\/)?[\w.-]+\.[a-z]{2,}(?:\/\S*)?$/i;
@@ -53,6 +68,14 @@ function pickField(data: Record<string, unknown>, key: string | undefined): stri
   return coerceToString(data[key]);
 }
 
+function pickFirstField(data: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = pickField(data, key);
+    if (value) return value;
+  }
+  return undefined;
+}
+
 function normalizePostUrl(raw: string): string | undefined {
   const trimmed = raw.trim();
   if (!trimmed) return undefined;
@@ -71,154 +94,43 @@ function normalizePlatform(raw: string | undefined): SocialPlatform | undefined 
   return undefined;
 }
 
-function getFieldKeys() {
+interface PlatformBlockKeys {
+  postUrl: string;
+  screenshot: string;
+}
+
+function getPlatformBlockKeys(): Record<SocialPlatform, PlatformBlockKeys> {
   const env = getEnv();
   return {
-    platform: env.ZOHO_SOCIAL_WEBHOOK_FIELD_PLATFORM?.trim() || DEFAULT_FIELD_KEYS.platform,
-    postUrl: env.ZOHO_SOCIAL_WEBHOOK_FIELD_POST_URL?.trim() || DEFAULT_FIELD_KEYS.postUrl,
-    screenshot: env.ZOHO_SOCIAL_WEBHOOK_FIELD_SCREENSHOT?.trim() || DEFAULT_FIELD_KEYS.screenshot,
-    postUrlLinkedIn:
-      env.ZOHO_SOCIAL_WEBHOOK_FIELD_POST_URL_LINKEDIN?.trim() || DEFAULT_FIELD_KEYS.postUrlLinkedIn,
-    screenshotLinkedIn:
-      env.ZOHO_SOCIAL_WEBHOOK_FIELD_SCREENSHOT_LINKEDIN?.trim() ||
-      DEFAULT_FIELD_KEYS.screenshotLinkedIn,
+    linkedin: {
+      postUrl:
+        env.ZOHO_SOCIAL_WEBHOOK_FIELD_LINKEDIN_POST_URL?.trim() ||
+        env.ZOHO_SOCIAL_WEBHOOK_FIELD_POST_URL?.trim() ||
+        DEFAULT_PLATFORM_BLOCKS.linkedin.postUrl,
+      screenshot:
+        env.ZOHO_SOCIAL_WEBHOOK_FIELD_LINKEDIN_SCREENSHOT?.trim() ||
+        env.ZOHO_SOCIAL_WEBHOOK_FIELD_SCREENSHOT?.trim() ||
+        DEFAULT_PLATFORM_BLOCKS.linkedin.screenshot,
+    },
+    instagram: {
+      postUrl:
+        env.ZOHO_SOCIAL_WEBHOOK_FIELD_INSTAGRAM_POST_URL?.trim() ||
+        env.ZOHO_SOCIAL_WEBHOOK_FIELD_POST_URL_LINKEDIN?.trim() ||
+        DEFAULT_PLATFORM_BLOCKS.instagram.postUrl,
+      screenshot:
+        env.ZOHO_SOCIAL_WEBHOOK_FIELD_INSTAGRAM_SCREENSHOT?.trim() ||
+        env.ZOHO_SOCIAL_WEBHOOK_FIELD_SCREENSHOT_LINKEDIN?.trim() ||
+        DEFAULT_PLATFORM_BLOCKS.instagram.screenshot,
+    },
   };
 }
 
-function pickPlatform(data: Record<string, unknown>, fieldKeys: ReturnType<typeof getFieldKeys>): SocialPlatform | undefined {
-  const fromMapped = normalizePlatform(pickField(data, fieldKeys.platform));
-  if (fromMapped) return fromMapped;
-
-  const labeled = pickString(
-    data,
-    'Platform',
-    'platform',
-    'Social Platform',
-    'social_platform',
-    'Social platform',
-    'Share Platform'
-  );
-  const fromLabeled = normalizePlatform(labeled);
-  if (fromLabeled) return fromLabeled;
-
-  for (const [key, value] of Object.entries(data)) {
-    if (/platform|social/i.test(key)) {
-      const fromKey = normalizePlatform(coerceToString(value));
-      if (fromKey) return fromKey;
-    }
-  }
-
-  for (const [, value] of Object.entries(data)) {
-    const fromValue = normalizePlatform(coerceToString(value));
-    if (fromValue) return fromValue;
-  }
-
-  const igUrl = normalizePostUrl(pickField(data, fieldKeys.postUrl) ?? '');
-  const liUrl = normalizePostUrl(pickField(data, fieldKeys.postUrlLinkedIn) ?? '');
-  if (igUrl && !liUrl) return 'instagram';
-  if (liUrl && !igUrl) return 'linkedin';
-
+function pickScreenshotUrl(raw: string | undefined, postUrl: string): string | undefined {
+  if (!raw) return undefined;
+  const asUrl = normalizePostUrl(raw);
+  if (asUrl && asUrl !== postUrl) return asUrl;
+  if (HTTP_URL_PATTERN.test(raw) && raw !== postUrl) return raw;
   return undefined;
-}
-
-function collectUrlCandidates(data: Record<string, unknown>): string[] {
-  const urls: string[] = [];
-  for (const value of Object.values(data)) {
-    const s = coerceToString(flattenFieldValue(value));
-    if (!s) continue;
-    const normalized = normalizePostUrl(s);
-    if (normalized) urls.push(normalized);
-  }
-  return urls;
-}
-
-function pickPostUrl(
-  data: Record<string, unknown>,
-  fieldKeys: ReturnType<typeof getFieldKeys>,
-  platform?: SocialPlatform
-): string | undefined {
-  const mappedKey =
-    platform === 'linkedin' && pickField(data, fieldKeys.postUrlLinkedIn)
-      ? fieldKeys.postUrlLinkedIn
-      : fieldKeys.postUrl;
-
-  const fromMapped = normalizePostUrl(pickField(data, mappedKey) ?? '');
-  if (fromMapped) return fromMapped;
-
-  const labeled = pickString(
-    data,
-    'Post URL',
-    'post_url',
-    'Post Link',
-    'postUrl',
-    'Link',
-    'link',
-    'URL',
-    'Public post URL'
-  );
-  const fromLabeled = labeled ? normalizePostUrl(labeled) : undefined;
-  if (fromLabeled) return fromLabeled;
-
-  for (const [key, value] of Object.entries(data)) {
-    if (/post|link|url/i.test(key) && !/screenshot|upload|file|image/i.test(key)) {
-      const candidate = normalizePostUrl(coerceToString(value) ?? '');
-      if (candidate) return candidate;
-    }
-  }
-
-  const candidates = collectUrlCandidates(data);
-  return candidates[0];
-}
-
-function pickScreenshotUrl(
-  data: Record<string, unknown>,
-  fieldKeys: ReturnType<typeof getFieldKeys>,
-  postUrl: string | undefined,
-  platform?: SocialPlatform
-): string | undefined {
-  const mappedKey =
-    platform === 'linkedin' && data[fieldKeys.screenshotLinkedIn] !== undefined
-      ? fieldKeys.screenshotLinkedIn
-      : fieldKeys.screenshot;
-
-  const fromMapped = pickField(data, mappedKey);
-  if (fromMapped) {
-    const asUrl = normalizePostUrl(fromMapped);
-    if (asUrl && asUrl !== postUrl) return asUrl;
-    if (HTTP_URL_PATTERN.test(fromMapped)) return fromMapped;
-  }
-
-  const labeled = pickString(
-    data,
-    'Screenshot',
-    'screenshot',
-    'Screenshot URL',
-    'screenshot_url',
-    'Upload',
-    'upload',
-    'File',
-    'file',
-    'Image',
-    'image',
-    'Proof',
-    'proof'
-  );
-  if (labeled) {
-    const asUrl = normalizePostUrl(labeled) ?? (HTTP_URL_PATTERN.test(labeled) ? labeled : undefined);
-    if (asUrl && asUrl !== postUrl) return asUrl;
-  }
-
-  for (const [key, value] of Object.entries(data)) {
-    if (/screenshot|upload|file|image|proof|attachment/i.test(key)) {
-      const candidate = coerceToString(value);
-      if (!candidate) continue;
-      const asUrl = normalizePostUrl(candidate) ?? (HTTP_URL_PATTERN.test(candidate) ? candidate : undefined);
-      if (asUrl && asUrl !== postUrl) return asUrl;
-    }
-  }
-
-  const candidates = collectUrlCandidates(data).filter((u) => u !== postUrl);
-  return candidates[0];
 }
 
 interface ParsedSocialProofPayload {
@@ -227,50 +139,87 @@ interface ParsedSocialProofPayload {
   screenshotUrl: string;
 }
 
-function parseSocialProofPayload(data: Record<string, unknown>): ParsedSocialProofPayload {
-  const fieldKeys = getFieldKeys();
-  const platform = pickPlatform(data, fieldKeys);
-  if (!platform) {
-    throw ApiError.badRequest(
-      'Platform is required (Instagram or LinkedIn). Map Field_5 or add a Platform field in Zoho Auto-Map. Received keys: ' +
-        Object.keys(data).join(', ')
-    );
-  }
-
-  const postUrl = pickPostUrl(data, fieldKeys, platform);
-  if (!postUrl) {
-    throw ApiError.badRequest(
-      `Post URL is required. Expected ${fieldKeys.postUrl} or a labeled Post URL field. ` +
-        'Zoho test data uses "www.example.com" — use a real submission or ensure Field_7 contains a valid URL.'
-    );
-  }
+function parsePlatformBlock(
+  data: Record<string, unknown>,
+  platform: SocialPlatform,
+  keys: PlatformBlockKeys
+): ParsedSocialProofPayload | undefined {
+  const labeled = LABELED_PLATFORM_BLOCKS[platform];
+  const postUrlRaw =
+    pickField(data, keys.postUrl) ?? pickFirstField(data, labeled.postUrl);
+  const postUrl = postUrlRaw ? normalizePostUrl(postUrlRaw) : undefined;
+  if (!postUrl) return undefined;
 
   try {
     new URL(postUrl);
   } catch {
-    throw ApiError.badRequest('Post URL is invalid.');
+    throw ApiError.badRequest(`${platform} post URL is invalid (${keys.postUrl}).`);
   }
 
-  const screenshotUrl = pickScreenshotUrl(data, fieldKeys, postUrl, platform);
+  const screenshotRaw =
+    pickField(data, keys.screenshot) ?? pickFirstField(data, labeled.screenshot);
+  const screenshotUrl = pickScreenshotUrl(screenshotRaw, postUrl);
   if (!screenshotUrl) {
-    const screenshotRaw = pickField(data, fieldKeys.screenshot);
     throw ApiError.badRequest(
-      `Screenshot URL is required. Expected ${fieldKeys.screenshot} with an https download link. ` +
+      `${platform} screenshot URL is required (${keys.screenshot}).` +
         (screenshotRaw
-          ? `Got ${fieldKeys.screenshot}="${screenshotRaw}" (filename only). Zoho "Run Test" does not send real file URLs — submit the form once for a real webhook payload.`
-          : `Include ${fieldKeys.screenshot} in Auto-Map Fields.`)
+          ? ` Got "${screenshotRaw}" (filename only). Zoho "Run Test" does not send real file URLs — submit the form once for a real webhook payload.`
+          : ` Upload a screenshot in the ${platform} section of the form.`)
     );
   }
 
   return { platform, postUrl, screenshotUrl };
 }
 
-export interface SocialProofWebhookResult {
+function parseSocialProofPayloads(data: Record<string, unknown>): ParsedSocialProofPayload[] {
+  const blocks = getPlatformBlockKeys();
+  const parsed: ParsedSocialProofPayload[] = [];
+  const errors: string[] = [];
+
+  for (const platform of ['linkedin', 'instagram'] as const) {
+    try {
+      const block = parsePlatformBlock(data, platform, blocks[platform]);
+      if (block) parsed.push(block);
+    } catch (err) {
+      const keys = blocks[platform];
+      const postUrlRaw = pickField(data, keys.postUrl);
+      if (postUrlRaw) {
+        errors.push(err instanceof Error ? err.message : String(err));
+      }
+    }
+  }
+
+  if (parsed.length > 0) return parsed;
+
+  if (errors.length > 0) {
+    throw ApiError.badRequest(errors.join(' '));
+  }
+
+  const env = getEnv();
+  const platformField = env.ZOHO_SOCIAL_WEBHOOK_FIELD_PLATFORM?.trim();
+  const legacyPlatform = normalizePlatform(platformField ? pickField(data, platformField) : undefined);
+  if (legacyPlatform) {
+    const block = parsePlatformBlock(data, legacyPlatform, blocks[legacyPlatform]);
+    if (block) return [block];
+  }
+
+  throw ApiError.badRequest(
+    'At least one platform section is required. Fill LinkedIn (Field_7 + Field_8) and/or Instagram (Field_9 + Field_10). ' +
+      'This form has no Platform dropdown — the backend detects platform from which section you filled. Received keys: ' +
+      Object.keys(data).join(', ')
+  );
+}
+
+export interface SocialProofWebhookProofResult {
   created: boolean;
   proofId: string;
   platform: SocialPlatform;
-  teamId: string;
+}
+
+export interface SocialProofWebhookResult {
   email: string;
+  teamId: string;
+  proofs: SocialProofWebhookProofResult[];
 }
 
 async function upsertOneSocialProof(
@@ -334,7 +283,7 @@ export async function upsertFromZohoSocialProofWebhook(
     );
   }
 
-  const parsed = parseSocialProofPayload(data);
+  const parsedPayloads = parseSocialProofPayloads(data);
 
   const zohoSubmissionId = pickString(
     data,
@@ -344,19 +293,6 @@ export async function upsertFromZohoSocialProofWebhook(
     'ID',
     'Response ID'
   );
-
-  if (zohoSubmissionId) {
-    const existingBySubmission = await SocialProof.findOne({ zohoSubmissionId });
-    if (existingBySubmission) {
-      return {
-        created: false,
-        proofId: existingBySubmission._id.toString(),
-        platform: existingBySubmission.platform,
-        teamId: existingBySubmission.team.toString(),
-        email,
-      };
-    }
-  }
 
   const user = await HackathonUser.findOne({ email: email.toLowerCase() });
   if (!user) {
@@ -374,13 +310,37 @@ export async function upsertFromZohoSocialProofWebhook(
   }
 
   const teamId = user.team.toString();
-  const { proof, created } = await upsertOneSocialProof(user, teamId, parsed, zohoSubmissionId);
+  const proofs: SocialProofWebhookProofResult[] = [];
 
-  return {
-    created,
-    proofId: proof._id.toString(),
-    platform: parsed.platform,
-    teamId,
-    email,
-  };
+  for (const parsed of parsedPayloads) {
+    const submissionKey = zohoSubmissionId
+      ? `${zohoSubmissionId}:${parsed.platform}`
+      : undefined;
+
+    if (submissionKey) {
+      const existingBySubmission = await SocialProof.findOne({ zohoSubmissionId: submissionKey });
+      if (existingBySubmission) {
+        proofs.push({
+          created: false,
+          proofId: existingBySubmission._id.toString(),
+          platform: existingBySubmission.platform,
+        });
+        continue;
+      }
+    }
+
+    const { proof, created } = await upsertOneSocialProof(
+      user,
+      teamId,
+      parsed,
+      submissionKey
+    );
+    proofs.push({
+      created,
+      proofId: proof._id.toString(),
+      platform: parsed.platform,
+    });
+  }
+
+  return { email, teamId, proofs };
 }

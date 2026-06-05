@@ -41,15 +41,29 @@ export const zohoSocialProofWebhook = asyncHandler(async (req: Request, res: Res
   const data = normalizeZohoPayload(req.body);
   const result = await upsertFromZohoSocialProofWebhook(data);
 
+  const createdCount = result.proofs.filter((p) => p.created).length;
+  const updatedCount = result.proofs.length - createdCount;
+  const message =
+    result.proofs.length === 0
+      ? 'No social proofs processed'
+      : createdCount && updatedCount
+        ? `${createdCount} submitted, ${updatedCount} updated for review`
+        : createdCount
+          ? `${createdCount} social proof(s) submitted for review`
+          : `${updatedCount} social proof(s) updated for review`;
+
   res.json({
     success: true,
-    message: result.created ? 'Social proof submitted for review' : 'Social proof updated for review',
+    message,
     data: {
       email: result.email,
-      platform: result.platform,
       teamId: result.teamId,
-      proofId: result.proofId,
-      status: 'pending',
+      proofs: result.proofs.map((p) => ({
+        platform: p.platform,
+        proofId: p.proofId,
+        created: p.created,
+        status: 'pending',
+      })),
     },
   });
 });
