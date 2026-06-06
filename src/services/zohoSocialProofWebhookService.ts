@@ -7,8 +7,8 @@ import { SOCIAL_PLATFORM_POINTS } from './pointsService.js';
 
 /**
  * Claim Your Viral Points form layout (no Platform dropdown):
- * - Field_7 / Field_8  → LinkedIn post link + screenshot
- * - Field_9 / Field_10 → Instagram profile/post link + screenshot
+ * - Field_7 / Field_8  → LinkedIn post link + screenshot (any text/link — stored as-is)
+ * - Field_9 / Field_10 → Instagram profile/post link + screenshot (any text/link — stored as-is)
  */
 const DEFAULT_PLATFORM_BLOCKS = {
   linkedin: { postUrl: 'Field_7', screenshot: 'Field_8' },
@@ -125,18 +125,17 @@ function getPlatformBlockKeys(): Record<SocialPlatform, PlatformBlockKeys> {
   };
 }
 
-function pickScreenshotUrl(raw: string | undefined, postUrl: string): string | undefined {
+/** Store whatever Zoho sends — URL, filename, or plain text. Never reject or normalize. */
+function pickScreenshotValue(raw: string | undefined): string | undefined {
   if (!raw) return undefined;
-  const asUrl = normalizePostUrl(raw);
-  if (asUrl && asUrl !== postUrl) return asUrl;
-  if (HTTP_URL_PATTERN.test(raw) && raw !== postUrl) return raw;
-  return undefined;
+  const trimmed = raw.trim();
+  return trimmed || undefined;
 }
 
 interface ParsedSocialProofPayload {
   platform: SocialPlatform;
   postUrl: string;
-  screenshotUrl: string;
+  screenshotUrl?: string;
 }
 
 function parsePlatformBlock(
@@ -158,17 +157,13 @@ function parsePlatformBlock(
 
   const screenshotRaw =
     pickField(data, keys.screenshot) ?? pickFirstField(data, labeled.screenshot);
-  const screenshotUrl = pickScreenshotUrl(screenshotRaw, postUrl);
-  if (!screenshotUrl) {
-    throw ApiError.badRequest(
-      `${platform} screenshot URL is required (${keys.screenshot}).` +
-        (screenshotRaw
-          ? ` Got "${screenshotRaw}" (filename only). Zoho "Run Test" does not send real file URLs — submit the form once for a real webhook payload.`
-          : ` Upload a screenshot in the ${platform} section of the form.`)
-    );
-  }
+  const screenshotUrl = pickScreenshotValue(screenshotRaw);
 
-  return { platform, postUrl, screenshotUrl };
+  return {
+    platform,
+    postUrl,
+    ...(screenshotUrl ? { screenshotUrl } : {}),
+  };
 }
 
 function parseSocialProofPayloads(data: Record<string, unknown>): ParsedSocialProofPayload[] {
@@ -204,8 +199,8 @@ function parseSocialProofPayloads(data: Record<string, unknown>): ParsedSocialPr
   }
 
   throw ApiError.badRequest(
-    'At least one platform section is required. Fill LinkedIn (Field_7 + Field_8) and/or Instagram (Field_9 + Field_10). ' +
-      'This form has no Platform dropdown — the backend detects platform from which section you filled. Received keys: ' +
+    'At least one post link is required. Fill LinkedIn (Field_7) and/or Instagram (Field_9). ' +
+      'Screenshots (Field_8 / Field_10) are optional. Received keys: ' +
       Object.keys(data).join(', ')
   );
 }
@@ -243,7 +238,7 @@ async function upsertOneSocialProof(
       submittedBy: user._id,
       platform: parsed.platform,
       postUrl: parsed.postUrl,
-      screenshotUrl: parsed.screenshotUrl,
+      ...(parsed.screenshotUrl ? { screenshotUrl: parsed.screenshotUrl } : {}),
       hashtag,
       status: 'pending',
       source: 'zoho',
@@ -255,7 +250,11 @@ async function upsertOneSocialProof(
 
   if (existing.status === 'pending' || existing.status === 'rejected') {
     existing.postUrl = parsed.postUrl;
-    existing.screenshotUrl = parsed.screenshotUrl;
+    if (parsed.screenshotUrl) {
+      existing.screenshotUrl = parsed.screenshotUrl;
+    } else {
+      existing.screenshotUrl = undefined;
+    }
     existing.submittedBy = user._id;
     existing.hashtag = hashtag;
     existing.status = 'pending';

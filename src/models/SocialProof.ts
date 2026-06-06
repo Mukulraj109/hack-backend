@@ -11,7 +11,7 @@ export interface ISocialProof extends Document {
   submittedBy: mongoose.Types.ObjectId;
   platform: SocialPlatform;
   postUrl: string;
-  screenshotUrl: string;
+  screenshotUrl?: string;
   templateId?: string;
   hashtag?: string;
   status: 'pending' | 'verified' | 'rejected';
@@ -48,7 +48,7 @@ const socialProofSchema = new Schema<ISocialProof>(
     },
     screenshotUrl: {
       type: String,
-      required: true,
+      trim: true,
     },
     templateId: {
       type: String,

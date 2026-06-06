@@ -4,9 +4,9 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { AuthenticatedRequest } from '../types/express/index.js';
 
 /** Matches seed + sprint portal schedule when DB config is absent. */
-const DEFAULT_START = new Date('2026-06-10T20:00:00-04:00');
+const DEFAULT_START = new Date('2026-07-08T20:00:00-04:00');
 const DEFAULT_SPRINT_HOURS = 100;
-const DEFAULT_END = new Date('2026-06-14T00:00:00-04:00');
+const DEFAULT_END = new Date('2026-07-13T00:00:00-04:00');
 
 function buildCountdownPayload(config: {
   startDate: Date;

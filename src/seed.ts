@@ -37,8 +37,8 @@ async function seed() {
     if (!configExists) {
       await HackathonConfig.create({
         name: 'FirstStepHack 2026',
-        startDate: new Date('2026-06-10T20:00:00-04:00'),
-        endDate: new Date('2026-06-14T00:00:00-04:00'),
+        startDate: new Date('2026-07-08T20:00:00-04:00'),
+        endDate: new Date('2026-07-13T00:00:00-04:00'),
         sprintHours: 100,
         maxPoints: 250,
         maxJudgePoints: 175,
