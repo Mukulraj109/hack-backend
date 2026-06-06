@@ -16,6 +16,8 @@ import assetRoutes from './routes/assets.js';
 import hackathonRoutes from './routes/hackathon.js';
 import hackathonAdminRoutes from './routes/hackathonAdmin.js';
 import webhookRoutes from './routes/webhooks.js';
+import { proxyZohoFormFallback } from './controllers/zohoFormFallbackController.js';
+import { zohoFormProxyRawBody } from './utils/zohoFormProxyRequest.js';
 import { getEnv } from './config/env.js';
 
 export function createApp(): Application {
@@ -32,8 +34,15 @@ export function createApp(): Application {
     credentials: true,
   }));
 
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  app.use(zohoFormProxyRawBody);
+  app.use((req, res, next) => {
+    if (Buffer.isBuffer(req.body)) return next();
+    express.json()(req, res, next);
+  });
+  app.use((req, res, next) => {
+    if (Buffer.isBuffer(req.body)) return next();
+    express.urlencoded({ extended: true })(req, res, next);
+  });
   app.use(cookieParser());
 
   app.get('/health', (_req, res) => {
@@ -53,6 +62,9 @@ export function createApp(): Application {
   app.use('/api/hackathon', hackathonRoutes);
   app.use('/api/hackathon/admin', hackathonAdminRoutes);
   app.use('/api/webhooks', webhookRoutes);
+
+  // ZFLive may POST to /FirstStep/form/... on our origin when embedded via proxy iframe.
+  app.all(/^\/FirstStep\/form\/.*$/, proxyZohoFormFallback);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -6,6 +6,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { AuthenticatedRequest } from '../types/express/index.js';
 import * as leaderboardService from '../services/leaderboardService.js';
 import * as pointsService from '../services/pointsService.js';
+import { notifyTeamScoreIncrease } from '../services/scoreUpdateEmailService.js';
 
 export const updateConfigSchema = z.object({
   name: z.string().optional(),
@@ -180,7 +181,17 @@ export const scoreSubmission = asyncHandler(async (req: AuthenticatedRequest, re
 
   const team = await Team.findById(submission.team);
   if (team) {
+    const previousScore = team.totalPoints ?? 0;
     await pointsService.syncTeamPoints(team._id.toString());
+    const updatedTeam = await Team.findById(team._id).select('totalPoints');
+    void notifyTeamScoreIncrease(
+      team._id.toString(),
+      previousScore,
+      updatedTeam?.totalPoints ?? previousScore,
+      'Judge evaluation'
+    ).catch((err) => {
+      console.error('[score-update] scoreSubmission notify failed', { teamId: team._id, err });
+    });
   }
 
   res.json({

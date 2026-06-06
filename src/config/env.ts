@@ -46,6 +46,53 @@ export const envSchema = z.object({
   FIREBASE_PRIVATE_KEY: z.string().optional(),
   FIREBASE_CLIENT_EMAIL: z.string().optional(),
   FIREBASE_STORAGE_BUCKET: z.string().optional(),
+  /** ZeptoMail API token (include Zoho-enczapikey prefix). */
+  ZEPTOMAIL_API_TOKEN: z.string().optional(),
+  /** ZeptoMail template key for registration approval emails. */
+  ZEPTOMAIL_APPROVAL_TEMPLATE_KEY: z.string().optional(),
+  /** Optional exact merge_info key from template Merge info tab (e.g. name_firstname). */
+  ZEPTOMAIL_APPROVAL_MERGE_FIRSTNAME_KEY: z.string().optional(),
+  ZEPTOMAIL_FROM_ADDRESS: z.string().default('noreply@firststepjob.com'),
+  ZEPTOMAIL_FROM_NAME: z
+    .string()
+    .optional()
+    .transform((v) => v?.trim() || 'FirstStep')
+    .default('FirstStep'),
+  /** ZeptoMail template key for team reminder emails. */
+  ZEPTOMAIL_TEAM_REMINDER_TEMPLATE_KEY: z
+    .string()
+    .default(
+      '2518b.354647c12fb35c26.k1.db199020-61b0-11f1-aab5-525400c92439.19e9d415222'
+    ),
+  TEAM_REMINDER_CRON_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v !== 'false' && v !== '0')
+    .default('true'),
+  TEAM_REMINDER_CRON_SCHEDULE: z.string().default('0 10 * * *'),
+  TEAM_REMINDER_MIN_HOURS_AFTER_ACTIVE: z.string().default('48').transform(Number),
+  TEAM_REMINDER_MIN_HOURS_BETWEEN_SENDS: z.string().default('24').transform(Number),
+  /** ZeptoMail template key for claim 50 points emails. */
+  ZEPTOMAIL_CLAIM_POINTS_TEMPLATE_KEY: z
+    .string()
+    .default(
+      '2518b.354647c12fb35c26.k1.099f4870-61b3-11f1-9e57-d2cf08f4ca8c.19e9d4f9e77'
+    ),
+  CLAIM_POINTS_REMINDER_CRON_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v !== 'false' && v !== '0')
+    .default('true'),
+  CLAIM_POINTS_REMINDER_CRON_SCHEDULE: z.string().default('0 11 * * *'),
+  CLAIM_POINTS_REMINDER_MIN_HOURS_BETWEEN_SENDS: z.string().default('24').transform(Number),
+  /** ZeptoMail template key for hackathon score update emails. */
+  ZEPTOMAIL_SCORE_UPDATE_TEMPLATE_KEY: z
+    .string()
+    .default(
+      '2518b.354647c12fb35c26.k1.192cda92-61b9-11f1-9e57-d2cf08f4ca8c.19e9d7756b9'
+    ),
+  /** Sprint dashboard URL for score update email CTA. Defaults to first CORS_ORIGIN + /sprint. */
+  HACKATHON_DASHBOARD_URL: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -96,6 +143,23 @@ export function getEnv(): Env {
     FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY,
     FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL,
     FIREBASE_STORAGE_BUCKET: process.env.FIREBASE_STORAGE_BUCKET,
+    ZEPTOMAIL_API_TOKEN: process.env.ZEPTOMAIL_API_TOKEN,
+    ZEPTOMAIL_APPROVAL_TEMPLATE_KEY: process.env.ZEPTOMAIL_APPROVAL_TEMPLATE_KEY,
+    ZEPTOMAIL_APPROVAL_MERGE_FIRSTNAME_KEY: process.env.ZEPTOMAIL_APPROVAL_MERGE_FIRSTNAME_KEY,
+    ZEPTOMAIL_FROM_ADDRESS: process.env.ZEPTOMAIL_FROM_ADDRESS,
+    ZEPTOMAIL_FROM_NAME: process.env.ZEPTOMAIL_FROM_NAME,
+    ZEPTOMAIL_TEAM_REMINDER_TEMPLATE_KEY: process.env.ZEPTOMAIL_TEAM_REMINDER_TEMPLATE_KEY,
+    TEAM_REMINDER_CRON_ENABLED: process.env.TEAM_REMINDER_CRON_ENABLED,
+    TEAM_REMINDER_CRON_SCHEDULE: process.env.TEAM_REMINDER_CRON_SCHEDULE,
+    TEAM_REMINDER_MIN_HOURS_AFTER_ACTIVE: process.env.TEAM_REMINDER_MIN_HOURS_AFTER_ACTIVE,
+    TEAM_REMINDER_MIN_HOURS_BETWEEN_SENDS: process.env.TEAM_REMINDER_MIN_HOURS_BETWEEN_SENDS,
+    ZEPTOMAIL_CLAIM_POINTS_TEMPLATE_KEY: process.env.ZEPTOMAIL_CLAIM_POINTS_TEMPLATE_KEY,
+    CLAIM_POINTS_REMINDER_CRON_ENABLED: process.env.CLAIM_POINTS_REMINDER_CRON_ENABLED,
+    CLAIM_POINTS_REMINDER_CRON_SCHEDULE: process.env.CLAIM_POINTS_REMINDER_CRON_SCHEDULE,
+    CLAIM_POINTS_REMINDER_MIN_HOURS_BETWEEN_SENDS:
+      process.env.CLAIM_POINTS_REMINDER_MIN_HOURS_BETWEEN_SENDS,
+    ZEPTOMAIL_SCORE_UPDATE_TEMPLATE_KEY: process.env.ZEPTOMAIL_SCORE_UPDATE_TEMPLATE_KEY,
+    HACKATHON_DASHBOARD_URL: process.env.HACKATHON_DASHBOARD_URL,
   });
 
   return env;

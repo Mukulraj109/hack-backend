@@ -107,7 +107,7 @@ function splitCombinedName(combined: string): { firstName?: string; lastName?: s
 }
 
 /** Zoho export uses single "Name" (e.g. "Sai, N") — split for HackathonUser */
-function parseNameField(data: Record<string, unknown>): {
+export function parseNameField(data: Record<string, unknown>): {
   firstName?: string;
   lastName?: string;
 } {

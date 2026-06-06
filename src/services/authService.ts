@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { HackathonTrackId } from '../config/tracks.js';
 import { User, IUser } from '../models/index.js';
 import { ApiError } from '../utils/ApiError.js';
 import { generateReferralCode } from '../utils/generateCode.js';
@@ -10,7 +11,7 @@ export interface RegisterInput {
   password: string;
   name: string;
   teamName?: string;
-  track?: 'ai-career-agent' | 'recruiter-bridge' | 'open-build';
+  track?: HackathonTrackId;
   referralCode?: string;
 }
 

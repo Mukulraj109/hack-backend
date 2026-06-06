@@ -10,6 +10,12 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { AuthenticatedRequest } from '../types/express/index.js';
 import { hasRegistration } from '../services/hackathonUserService.js';
+import { sendApprovalEmail } from '../services/zeptomailService.js';
+import {
+  notifyTeamScoreIncrease,
+  notifyUserScoreIncrease,
+  socialProofVerifyReason,
+} from '../services/scoreUpdateEmailService.js';
 import {
   SOCIAL_PLATFORM_POINTS,
   syncTeamPoints,
@@ -164,7 +170,17 @@ export const addUserPoints = asyncHandler(async (req: AuthenticatedRequest, res:
 
     team.manualPointsBonus = nextBonus;
     await team.save();
+    const previousScore = team.totalPoints ?? 0;
     const totalPoints = await syncTeamPoints(team._id.toString());
+    const updatedTeam = await Team.findById(team._id).select('totalPoints');
+    void notifyTeamScoreIncrease(
+      team._id.toString(),
+      previousScore,
+      updatedTeam?.totalPoints ?? totalPoints,
+      'Sprint bonus points awarded'
+    ).catch((err) => {
+      console.error('[score-update] addUserPoints team notify failed', { teamId: team._id, err });
+    });
 
     res.json({
       success: true,
@@ -187,8 +203,18 @@ export const addUserPoints = asyncHandler(async (req: AuthenticatedRequest, res:
   }
 
   user.manualPointsBonus = nextBonus;
+  const previousScore = user.totalPoints ?? 0;
   user.totalPoints = nextBonus;
   await user.save();
+
+  void notifyUserScoreIncrease(
+    user._id.toString(),
+    previousScore,
+    user.totalPoints,
+    'Sprint bonus points awarded'
+  ).catch((err) => {
+    console.error('[score-update] addUserPoints solo notify failed', { userId: user._id, err });
+  });
 
   res.json({
     success: true,
@@ -210,6 +236,7 @@ export const updateAccountStatus = asyncHandler(async (req: AuthenticatedRequest
     throw ApiError.notFound('User not found');
   }
 
+  const previousStatus = user.accountStatus;
   user.accountStatus = accountStatus;
 
   if (accountStatus === 'active') {
@@ -219,6 +246,15 @@ export const updateAccountStatus = asyncHandler(async (req: AuthenticatedRequest
   }
 
   await user.save();
+
+  if (accountStatus === 'active' && previousStatus !== 'active') {
+    void sendApprovalEmail(user).catch((err) => {
+      console.error('[zeptomail] approval email failed', {
+        userId: user._id.toString(),
+        err,
+      });
+    });
+  }
 
   res.json({
     success: true,
@@ -345,7 +381,21 @@ export const scoreSubmissionJudge = asyncHandler(async (req: AuthenticatedReques
   await submission.save();
 
   if (submission.team) {
+    const team = await Team.findById(submission.team).select('totalPoints');
+    const previousScore = team?.totalPoints ?? 0;
     await syncTeamPoints(submission.team.toString());
+    const updatedTeam = await Team.findById(submission.team).select('totalPoints');
+    void notifyTeamScoreIncrease(
+      submission.team.toString(),
+      previousScore,
+      updatedTeam?.totalPoints ?? previousScore,
+      'Judge evaluation'
+    ).catch((err) => {
+      console.error('[score-update] scoreSubmissionJudge notify failed', {
+        teamId: submission.team,
+        err,
+      });
+    });
   }
 
   const populated = await Submission.findById(submission._id)
@@ -385,6 +435,7 @@ export const getSocialProofs = asyncHandler(async (req: AuthenticatedRequest, re
         email?: string;
       } | null;
       const team = proof.team as unknown as { title?: string } | null;
+      const zoho = proof.zohoFormData;
       const haystack = [
         team?.title,
         proof.platform,
@@ -392,6 +443,13 @@ export const getSocialProofs = asyncHandler(async (req: AuthenticatedRequest, re
         submitter?.firstName,
         submitter?.lastName,
         [submitter?.firstName, submitter?.lastName].filter(Boolean).join(' '),
+        zoho?.email,
+        zoho?.firstName,
+        zoho?.lastName,
+        zoho?.phone,
+        zoho?.teamId,
+        zoho?.teamName,
+        [zoho?.firstName, zoho?.lastName].filter(Boolean).join(' '),
       ]
         .filter(Boolean)
         .join(' ')
@@ -431,7 +489,22 @@ export const verifySocialProof = asyncHandler(async (req: AuthenticatedRequest, 
   }
 
   await proof.save();
+
+  const teamBefore = await Team.findById(proof.team).select('totalPoints');
+  const previousScore = teamBefore?.totalPoints ?? 0;
   await syncTeamPoints(proof.team.toString());
+
+  if (status === 'verified') {
+    const updatedTeam = await Team.findById(proof.team).select('totalPoints');
+    void notifyTeamScoreIncrease(
+      proof.team.toString(),
+      previousScore,
+      updatedTeam?.totalPoints ?? previousScore,
+      socialProofVerifyReason(proof.platform)
+    ).catch((err) => {
+      console.error('[score-update] verifySocialProof notify failed', { proofId: proof._id, err });
+    });
+  }
 
   const populated = await SocialProof.findById(proof._id)
     .populate('team', 'title inviteCode')

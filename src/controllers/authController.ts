@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { z } from 'zod';
+import { HACKATHON_TRACK_IDS } from '../config/tracks.js';
 import * as authService from '../services/authService.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -11,7 +12,7 @@ export const registerSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters'),
   name: z.string().min(2, 'Name is required'),
   teamName: z.string().optional(),
-  track: z.enum(['ai-career-agent', 'recruiter-bridge', 'open-build']).optional(),
+  track: z.enum(HACKATHON_TRACK_IDS).optional(),
   referralCode: z.string().optional(),
 });
 

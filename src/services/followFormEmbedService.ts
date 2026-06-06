@@ -3,6 +3,11 @@ import { Request } from 'express';
 import { getEnv } from '../config/env.js';
 import { ApiError } from '../utils/ApiError.js';
 import { getJwtSecret } from '../utils/jwtSecrets.js';
+import {
+  buildZohoSubmitUrlRewriteScript,
+  rewriteZohoEmbedBody,
+} from '../utils/zohoFormEmbedRewrite.js';
+import { buildZohoUpstreamRequestInit } from '../utils/zohoFormProxyRequest.js';
 
 const ZOHO_HOST = 'forms.firststepjob.com';
 const EMBED_PURPOSE = 'hackathon-follow-form';
@@ -149,18 +154,20 @@ const EMBED_FORM_SUBMIT_SCRIPT = `<script id="firststep-follow-embed-notify">
 })();
 </script>`;
 
-function injectEmbedFormStyles(html: string): string {
+function injectEmbedFormStyles(html: string, token: string): string {
+  const rewriteScript = buildZohoSubmitUrlRewriteScript(proxyBasePath(token));
   let output = html.replace(
     /--form-width:\s*[^;]+;/gi,
     `--form-width: ${EMBED_FORM_WIDTH_OVERRIDE} !important;`
   );
 
+  const injected = `${rewriteScript}${EMBED_FORM_STYLE}${EMBED_FORM_SUBMIT_SCRIPT}`;
   if (output.includes('</head>')) {
-    output = output.replace('</head>', `${EMBED_FORM_STYLE}${EMBED_FORM_SUBMIT_SCRIPT}</head>`);
+    output = output.replace('</head>', `${injected}</head>`);
   } else if (/<body[\s>]/i.test(output)) {
-    output = output.replace(/<body/i, `${EMBED_FORM_STYLE}${EMBED_FORM_SUBMIT_SCRIPT}<body`);
+    output = output.replace(/<body/i, `${injected}<body`);
   } else {
-    output = `${EMBED_FORM_STYLE}${EMBED_FORM_SUBMIT_SCRIPT}${output}`;
+    output = `${injected}${output}`;
   }
 
   return output;
@@ -172,23 +179,25 @@ function patchEmbedFormCss(css: string): string {
 
 function rewriteBody(text: string, token: string, req: Request, contentType?: string): string {
   const origin = `${req.protocol}://${req.get('host')}`;
-  const proxyBase = `${origin}${proxyBasePath(token)}`;
-  const zohoHttps = `https://${ZOHO_HOST}`;
-  const zohoProtocolRelative = `//${ZOHO_HOST}`;
+  const proxyPath = proxyBasePath(token);
 
-  let output = text
-    .replaceAll(zohoHttps, proxyBase)
-    .replaceAll(zohoProtocolRelative, proxyBase)
-    .replace(/X-Frame-Options:\s*[^\r\n]+/gi, '')
-    .replace(/frame-ancestors[^;]*;?/gi, '');
-
-  if (contentType?.includes('text/html')) {
-    output = injectEmbedFormStyles(output);
-  } else if (contentType?.includes('text/css')) {
-    output = patchEmbedFormCss(output);
-  }
-
-  return output;
+  return rewriteZohoEmbedBody(
+    text,
+    {
+      proxyBase: `${origin}${proxyPath}`,
+      proxyBasePath: proxyPath,
+      zohoHost: ZOHO_HOST,
+    },
+    (output) => {
+      if (contentType?.includes('text/html')) {
+        return injectEmbedFormStyles(output, token);
+      }
+      if (contentType?.includes('text/css')) {
+        return patchEmbedFormCss(output);
+      }
+      return output;
+    }
+  );
 }
 
 function resolveUpstreamUrl(suffixPath: string): string {
@@ -217,16 +226,10 @@ export async function proxyFollowFormResource(
   verifyFollowFormEmbedToken(token);
 
   const upstreamUrl = resolveUpstreamUrl(suffixPath);
-  const upstream = await fetch(upstreamUrl, {
-    method: req.method,
-    headers: {
-      Accept: req.headers?.accept || '*/*',
-      'User-Agent': req.headers?.['user-agent'] || 'FirstStepHackathon/1.0',
-      'Accept-Language': req.headers?.['accept-language'] || 'en-US,en;q=0.9',
-    },
-    body: req.method !== 'GET' && req.method !== 'HEAD' ? (req as Request & { body: unknown }).body : undefined,
-    redirect: 'follow',
-  });
+  const upstream = await fetch(
+    upstreamUrl,
+    buildZohoUpstreamRequestInit(req, { zohoHost: ZOHO_HOST, suffixPath })
+  );
 
   const rawType = upstream.headers.get('content-type') || 'application/octet-stream';
   const contentType = rawType.split(';')[0]?.trim() || 'application/octet-stream';

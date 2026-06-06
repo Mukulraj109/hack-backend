@@ -1,7 +1,8 @@
 import { getEnv } from '../config/env.js';
 import { HackathonUser, HackathonConfig, SocialProof } from '../models/index.js';
 import type { SocialPlatform } from '../models/SocialProof.js';
-import { pickEmail, pickString } from './zohoWebhookService.js';
+import { pickEmail, pickString, parseNameField } from './zohoWebhookService.js';
+import type { IZohoFormSnapshot } from '../models/SocialProof.js';
 import { ApiError } from '../utils/ApiError.js';
 import { SOCIAL_PLATFORM_POINTS } from './pointsService.js';
 
@@ -138,6 +139,46 @@ interface ParsedSocialProofPayload {
   screenshotUrl?: string;
 }
 
+function hasGenericFieldKeys(data: Record<string, unknown>): boolean {
+  return Object.keys(data).some((k) => /^Field_\d+$/i.test(k));
+}
+
+function parseZohoSocialFormMeta(data: Record<string, unknown>): IZohoFormSnapshot {
+  const name = parseNameField(data);
+  const email = pickEmail(data);
+  const phone =
+    pickString(data, 'Phone', 'phone', 'Phone Number', 'Mobile', 'mobile') ??
+    (hasGenericFieldKeys(data) ? pickString(data, 'Field_4') : undefined);
+  const teamId =
+    pickString(
+      data,
+      'Team ID',
+      'Team Id',
+      'team_id',
+      'Invite Code',
+      'invite_code',
+      'Team Invite Code'
+    ) ?? (hasGenericFieldKeys(data) ? pickString(data, 'Field_5') : undefined);
+  const teamName =
+    pickString(data, 'Team Name', 'team_name', 'Team Title', 'team_title') ??
+    (hasGenericFieldKeys(data) ? pickString(data, 'Field_6') : undefined);
+
+  const snapshot: IZohoFormSnapshot = {};
+  if (name.firstName) snapshot.firstName = name.firstName;
+  if (name.lastName) snapshot.lastName = name.lastName;
+  if (email) snapshot.email = email;
+  if (phone) snapshot.phone = phone;
+  if (teamId) snapshot.teamId = teamId;
+  if (teamName) snapshot.teamName = teamName;
+  return snapshot;
+}
+
+function hasZohoFormSnapshot(snapshot: IZohoFormSnapshot): boolean {
+  return Object.values(snapshot).some(
+    (value) => typeof value === 'string' && value.trim() !== ''
+  );
+}
+
 function parsePlatformBlock(
   data: Record<string, unknown>,
   platform: SocialPlatform,
@@ -221,7 +262,8 @@ async function upsertOneSocialProof(
   user: InstanceType<typeof HackathonUser>,
   teamId: string,
   parsed: ParsedSocialProofPayload,
-  zohoSubmissionId?: string
+  zohoSubmissionId: string | undefined,
+  zohoFormData: IZohoFormSnapshot | undefined
 ): Promise<{ proof: InstanceType<typeof SocialProof>; created: boolean }> {
   const config = await HackathonConfig.findOne({ isActive: true });
   const hashtag = config?.socialHashtag ?? '#ShipIn100Hrs';
@@ -243,6 +285,7 @@ async function upsertOneSocialProof(
       status: 'pending',
       source: 'zoho',
       zohoSubmissionId,
+      ...(zohoFormData ? { zohoFormData } : {}),
       pointsEarned: SOCIAL_PLATFORM_POINTS,
     });
     return { proof, created: true };
@@ -260,6 +303,9 @@ async function upsertOneSocialProof(
     existing.status = 'pending';
     existing.source = 'zoho';
     existing.zohoSubmissionId = zohoSubmissionId ?? existing.zohoSubmissionId;
+    if (zohoFormData) {
+      existing.zohoFormData = zohoFormData;
+    }
     existing.verifiedAt = undefined;
     existing.verifiedBy = undefined;
     existing.pointsEarned = SOCIAL_PLATFORM_POINTS;
@@ -283,6 +329,8 @@ export async function upsertFromZohoSocialProofWebhook(
   }
 
   const parsedPayloads = parseSocialProofPayloads(data);
+  const zohoFormData = parseZohoSocialFormMeta(data);
+  const zohoFormSnapshot = hasZohoFormSnapshot(zohoFormData) ? zohoFormData : undefined;
 
   const zohoSubmissionId = pickString(
     data,
@@ -332,7 +380,8 @@ export async function upsertFromZohoSocialProofWebhook(
       user,
       teamId,
       parsed,
-      submissionKey
+      submissionKey,
+      zohoFormSnapshot
     );
     proofs.push({
       created,

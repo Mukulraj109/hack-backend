@@ -48,6 +48,10 @@ export interface IHackathonUser extends Document {
   hiringStatus?: HiringStatus;
   availabilityTimeline?: AvailabilityTimeline;
   team?: mongoose.Types.ObjectId;
+  lastTeamReminderSentAt?: Date;
+  teamReminderCount?: number;
+  lastClaimPointsReminderSentAt?: Date;
+  claimPointsReminderCount?: number;
   referralCode: string;
   totalPoints: number;
   manualPointsBonus: number;
@@ -122,6 +126,10 @@ const hackathonUserSchema = new Schema<IHackathonUser>(
       ref: 'Team',
       default: null,
     },
+    lastTeamReminderSentAt: { type: Date },
+    teamReminderCount: { type: Number, default: 0, min: 0 },
+    lastClaimPointsReminderSentAt: { type: Date },
+    claimPointsReminderCount: { type: Number, default: 0, min: 0 },
     referralCode: {
       type: String,
       unique: true,

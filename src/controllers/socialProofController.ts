@@ -13,6 +13,10 @@ import {
   SOCIAL_PLATFORM_POINTS,
   syncTeamPoints,
 } from '../services/pointsService.js';
+import {
+  notifyTeamScoreIncrease,
+  socialProofVerifyReason,
+} from '../services/scoreUpdateEmailService.js';
 import { HackathonConfig } from '../models/HackathonConfig.js';
 
 const SCREENSHOT_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -181,7 +185,21 @@ export const verifyProof = asyncHandler(async (req: AuthenticatedRequest, res: R
 
   await proof.save();
 
+  const teamBefore = await Team.findById(proof.team).select('totalPoints');
+  const previousScore = teamBefore?.totalPoints ?? 0;
   await syncTeamPoints(proof.team.toString());
+
+  if (status === 'verified') {
+    const updatedTeam = await Team.findById(proof.team).select('totalPoints');
+    void notifyTeamScoreIncrease(
+      proof.team.toString(),
+      previousScore,
+      updatedTeam?.totalPoints ?? previousScore,
+      socialProofVerifyReason(proof.platform)
+    ).catch((err) => {
+      console.error('[score-update] verifyProof notify failed', { proofId: proof._id, err });
+    });
+  }
 
   res.json({
     success: true,

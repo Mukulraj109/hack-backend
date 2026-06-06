@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { HACKATHON_TRACKS } from '../config/tracks.js';
 import { HackathonConfig } from '../models/index.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { AuthenticatedRequest } from '../types/express/index.js';
@@ -85,29 +86,17 @@ export const getSocial = asyncHandler(async (_req: AuthenticatedRequest, res: Re
 });
 
 export const getTracks = asyncHandler(async (_req: AuthenticatedRequest, res: Response) => {
-  const tracks = [
-    {
-      id: 'ai-career-agent',
-      title: 'AI Career Agent',
-      description: 'Build an AI workflow that helps candidates move faster from job search to recruiter conversations.',
-      tags: ['AI', 'Automation', 'LLMs'],
-    },
-    {
-      id: 'recruiter-bridge',
-      title: 'Recruiter Bridge',
-      description: 'Design a way to put great teams, proof of work, and hiring context in front of recruiters.',
-      tags: ['UX', 'Hiring', 'Web'],
-    },
-    {
-      id: 'open-build',
-      title: 'Open Build',
-      description: 'Use any stack and any tools to build a useful product that makes international hiring easier.',
-      tags: ['Any Stack', 'Open'],
-    },
-  ];
+  const config = await HackathonConfig.findOne({ isActive: true });
+  const startDate = config?.startDate ?? DEFAULT_START;
+  const briefUnlocked = new Date() >= startDate;
 
   res.json({
     success: true,
-    data: tracks,
+    data: HACKATHON_TRACKS,
+    meta: {
+      briefUnlocked,
+      briefReleaseDate: startDate,
+      briefReleaseTimeLabel: '8 PM EST',
+    },
   });
 });

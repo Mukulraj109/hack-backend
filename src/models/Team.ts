@@ -1,8 +1,9 @@
 import mongoose, { Document, Schema, Model } from 'mongoose';
+import { HACKATHON_TRACK_IDS, type HackathonTrackId } from '../config/tracks.js';
 import { mongooseToJsonTransform } from '../utils/mongooseToJson.js';
 import { HACKATHON_COLLECTIONS } from './collections.js';
 
-export type HackathonTrack = 'ai-career-agent' | 'recruiter-bridge' | 'open-build';
+export type HackathonTrack = HackathonTrackId;
 
 export interface ITeam extends Document {
   _id: mongoose.Types.ObjectId;
@@ -36,7 +37,7 @@ const teamSchema = new Schema<ITeam>(
     },
     track: {
       type: String,
-      enum: ['ai-career-agent', 'recruiter-bridge', 'open-build'],
+      enum: [...HACKATHON_TRACK_IDS],
       required: false,
     },
     leader: {

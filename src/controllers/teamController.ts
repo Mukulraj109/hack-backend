@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { z } from 'zod';
+import { HACKATHON_TRACK_IDS } from '../config/tracks.js';
 import * as teamService from '../services/teamService.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
@@ -16,7 +17,7 @@ export const joinTeamSchema = z.object({
 
 export const updateTeamSchema = z.object({
   title: z.string().min(2).optional(),
-  track: z.enum(['ai-career-agent', 'recruiter-bridge', 'open-build']).optional(),
+  track: z.enum(HACKATHON_TRACK_IDS).optional(),
 });
 
 export const createTeam = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {

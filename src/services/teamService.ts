@@ -4,6 +4,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { generateTeamInviteCode } from '../utils/generateInviteCode.js';
 import { TEAM_MEMBER_FIELDS } from '../utils/teamMembers.js';
 import { syncTeamPoints, clearUserPoints } from './pointsService.js';
+import { sendClaimPointsEmailIfEligible } from './claimPointsReminderService.js';
 
 const LEADER_FIELDS = TEAM_MEMBER_FIELDS;
 
@@ -41,6 +42,10 @@ export async function createTeam(input: CreateTeamInput): Promise<ITeam> {
   });
 
   await syncTeamPoints(team._id.toString());
+
+  void sendClaimPointsEmailIfEligible(input.leaderId).catch((err) => {
+    console.error('[claim-points] createTeam immediate send failed', { leaderId: input.leaderId, err });
+  });
 
   return team;
 }
@@ -81,6 +86,10 @@ export async function joinTeam(inviteCode: string, userId: string): Promise<ITea
   });
 
   await syncTeamPoints(team._id.toString());
+
+  void sendClaimPointsEmailIfEligible(userId).catch((err) => {
+    console.error('[claim-points] joinTeam immediate send failed', { userId, err });
+  });
 
   return team;
 }

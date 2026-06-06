@@ -1,3 +1,4 @@
+import { DEFAULT_HACKATHON_TRACK_ID } from '../config/tracks.js';
 import { Team, HackathonUser } from '../models/index.js';
 import { calculateTeamPoints, getPointsCaps } from './pointsService.js';
 
@@ -47,7 +48,7 @@ export async function getLeaderboard(currentUserId?: string): Promise<Leaderboar
       return {
         teamId: team._id.toString(),
         teamName: team.title,
-        track: team.track || 'open-build',
+        track: team.track || DEFAULT_HACKATHON_TRACK_ID,
         points: totalPoints,
         isFinalist: team.isFinalist,
         isWinner: team.isWinner,

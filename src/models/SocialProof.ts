@@ -5,6 +5,16 @@ import { HACKATHON_COLLECTIONS } from './collections.js';
 export type SocialPlatform = 'instagram' | 'linkedin';
 export type SocialProofSource = 'zoho' | 'app';
 
+/** Snapshot of Zoho social verification form fields at submit time. */
+export interface IZohoFormSnapshot {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  teamId?: string;
+  teamName?: string;
+}
+
 export interface ISocialProof extends Document {
   _id: mongoose.Types.ObjectId;
   team: mongoose.Types.ObjectId;
@@ -20,9 +30,22 @@ export interface ISocialProof extends Document {
   pointsEarned: number;
   zohoSubmissionId?: string;
   source?: SocialProofSource;
+  zohoFormData?: IZohoFormSnapshot;
   createdAt: Date;
   updatedAt: Date;
 }
+
+const zohoFormSnapshotSchema = new Schema<IZohoFormSnapshot>(
+  {
+    firstName: { type: String, trim: true },
+    lastName: { type: String, trim: true },
+    email: { type: String, trim: true, lowercase: true },
+    phone: { type: String, trim: true },
+    teamId: { type: String, trim: true },
+    teamName: { type: String, trim: true },
+  },
+  { _id: false }
+);
 
 const socialProofSchema = new Schema<ISocialProof>(
   {
@@ -84,6 +107,10 @@ const socialProofSchema = new Schema<ISocialProof>(
       type: String,
       enum: ['zoho', 'app'],
       default: 'zoho',
+    },
+    zohoFormData: {
+      type: zohoFormSnapshotSchema,
+      default: undefined,
     },
   },
   {
